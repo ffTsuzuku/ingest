@@ -42,9 +42,7 @@ $HOME/.config/git-ingest/config.jsonc
   "agents": {
     "opencode": {
       "provider": "openai",
-      "model": "qwen-max",
-      "api_key": null,
-      "api_key_env": null
+      "model": "qwen-max"
     }
   },
   "prompt": "Summarize repo activity from last 24h."
@@ -53,4 +51,8 @@ $HOME/.config/git-ingest/config.jsonc
 
 If `agents.opencode` is configured, the script will call the local `opencode` CLI with `--model provider/model`. If `agents.gemini-cli` is configured instead, it will call the local `gemini` CLI and pass the rendered prompt via stdin.
 
-`api_key` and `api_key_env` are accepted in config, but `opencode` itself manages provider credentials. In practice, the selected provider usually still needs to be configured in your local `opencode` setup.
+For each processed repo with AI output, the script also appends the full raw agent result to:
+
+```text
+<output_root>/<repo_name>/YYYY-MM-DD-agent-raw.log
+```

@@ -14,8 +14,6 @@ interface RepoConfig {
 interface OpencodeProviderConfig {
   provider: string;
   model: string;
-  api_key?: Nullable<string>;
-  api_key_env?: Nullable<string>;
 }
 
 interface GeminiCliProviderConfig {
@@ -61,6 +59,13 @@ interface AggregatedAnalysis {
   contributors: string[];
   narrative: string;
   rawResponse?: string;
+  rawResponseSource?: string;
+}
+
+interface AgentAnalysisResult {
+  content: string;
+  rawResult: string;
+  providerLabel: string;
 }
 
 const DEFAULT_CONFIG_PATH = "~/.config/git-ingest/config.jsonc";
@@ -342,28 +347,14 @@ function buildAnalysisPrompt(repoName: string, branches: string[], commits: Comm
   ].join("\n");
 }
 
-async function analyzeWithOpencode(prompt: string, provider: OpencodeProviderConfig): Promise<string> {
-  const env: NodeJS.ProcessEnv = {};
-  if (provider.api_key_env) {
-    const apiKey = process.env[provider.api_key_env];
-    if (!apiKey) {
-      throw new Error(`Environment variable "${provider.api_key_env}" is not set.`);
-    }
-    env[provider.api_key_env] = apiKey;
-  }
-
-  if (provider.api_key) {
-    env.OPENCODE_API_KEY = provider.api_key;
-  }
-
-  const result = await runCommand("opencode", ["run", "--format", "json", "--model", `${provider.provider}/${provider.model}`, prompt], {
-    env,
-  });
+async function analyzeWithOpencode(prompt: string, provider: OpencodeProviderConfig): Promise<AgentAnalysisResult> {
+  const result = await runCommand("opencode", ["run", "--format", "json", "--model", `${provider.provider}/${provider.model}`, prompt]);
 
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || "Opencode CLI invocation failed.");
   }
 
+  const rawResult = result.stdout.trim();
   const jsonLines = result.stdout
     .split("\n")
     .map((line) => line.trim())
@@ -378,22 +369,29 @@ async function analyzeWithOpencode(prompt: string, provider: OpencodeProviderCon
         (typeof parsed.text === "string" && parsed.text) ||
         (typeof parsed.message === "string" && parsed.message);
       if (message) {
-        return message.trim();
+        return {
+          content: message.trim(),
+          rawResult,
+          providerLabel: `opencode-cli:${provider.provider}/${provider.model}`,
+        };
       }
     } catch {
       continue;
     }
   }
 
-  const fallback = result.stdout.trim();
-  if (!fallback) {
+  if (!rawResult) {
     throw new Error("Opencode CLI returned an empty response.");
   }
 
-  return fallback;
+  return {
+    content: rawResult,
+    rawResult,
+    providerLabel: `opencode-cli:${provider.provider}/${provider.model}`,
+  };
 }
 
-async function analyzeWithGeminiCli(prompt: string, provider: GeminiCliProviderConfig): Promise<string> {
+async function analyzeWithGeminiCli(prompt: string, provider: GeminiCliProviderConfig): Promise<AgentAnalysisResult> {
   const env: NodeJS.ProcessEnv = {};
   if (provider.gemini_api_key_file) {
     env.GEMINI_API_KEY_FILE = resolvePath(provider.gemini_api_key_file);
@@ -413,7 +411,11 @@ async function analyzeWithGeminiCli(prompt: string, provider: GeminiCliProviderC
     throw new Error("Gemini CLI returned an empty response.");
   }
 
-  return content;
+  return {
+    content,
+    rawResult: content,
+    providerLabel: `gemini-cli:${provider.model}`,
+  };
 }
 
 function parseAiResponse(response: string): AggregatedAnalysis {
@@ -451,16 +453,7 @@ function parseAiResponse(response: string): AggregatedAnalysis {
   };
 }
 
-async function analyzeWithAI(repoName: string, branches: string[], commits: CommitRecord[], agents: AgentConfig, prompt: string): Promise<AggregatedAnalysis> {
-  const analysisPrompt = buildAnalysisPrompt(repoName, branches, commits, prompt);
-  const response = agents.opencode
-    ? await analyzeWithOpencode(analysisPrompt, agents.opencode)
-    : await analyzeWithGeminiCli(analysisPrompt, agents["gemini-cli"]!);
-
-  return parseAiResponse(response);
-}
-
-function fallbackAnalysis(commits: CommitRecord[]): AggregatedAnalysis {
+function buildDeterministicAnalysis(commits: CommitRecord[]): AggregatedAnalysis {
   const contributors = new Map<string, number>();
   const featureKeywords = /\b(add|feat|feature)\b/i;
   const fixKeywords = /\b(fix|bug|hotfix|regression)\b/i;
@@ -505,6 +498,28 @@ function fallbackAnalysis(commits: CommitRecord[]): AggregatedAnalysis {
   };
 }
 
+function mergeAnalysis(base: AggregatedAnalysis, overlay: AggregatedAnalysis): AggregatedAnalysis {
+  return {
+    commitSummary: base.commitSummary,
+    keyChanges: overlay.keyChanges.length > 0 ? overlay.keyChanges : base.keyChanges,
+    contributors: base.contributors,
+    narrative: overlay.narrative || base.narrative,
+    rawResponse: overlay.rawResponse,
+  };
+}
+
+async function analyzeWithAI(repoName: string, branches: string[], commits: CommitRecord[], agents: AgentConfig, prompt: string): Promise<AggregatedAnalysis> {
+  const analysisPrompt = buildAnalysisPrompt(repoName, branches, commits, prompt);
+  const agentResult = agents.opencode
+    ? await analyzeWithOpencode(analysisPrompt, agents.opencode)
+    : await analyzeWithGeminiCli(analysisPrompt, agents["gemini-cli"]!);
+
+  const analysis = mergeAnalysis(buildDeterministicAnalysis(commits), parseAiResponse(agentResult.content));
+  analysis.rawResponse = agentResult.rawResult;
+  analysis.rawResponseSource = agentResult.providerLabel;
+  return analysis;
+}
+
 function buildMarkdownReport(repoName: string, analysis: AggregatedAnalysis): string {
   const dateStamp = new Date().toISOString().slice(0, 10);
   const commitSummary = analysis.commitSummary.length > 0 ? analysis.commitSummary.join("\n") : "- No commits found.";
@@ -532,6 +547,21 @@ async function generateReport(outputRoot: string, repoName: string, markdown: st
   await mkdir(outputDir, { recursive: true });
   const outputPath = join(outputDir, `${dateStamp}-summary.md`);
   await writeFile(outputPath, markdown, "utf8");
+  return outputPath;
+}
+
+async function writeRawAgentLog(outputRoot: string, repoName: string, rawResponse: string, source: string): Promise<string> {
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const outputDir = join(outputRoot, repoName);
+  await mkdir(outputDir, { recursive: true });
+  const outputPath = join(outputDir, `${dateStamp}-agent-raw.log`);
+  const payload = [
+    `[${new Date().toISOString()}] Raw agent result for ${repoName}`,
+    `Source: ${source}`,
+    rawResponse,
+    "",
+  ].join("\n");
+  await appendFile(outputPath, payload, "utf8");
   return outputPath;
 }
 
@@ -612,7 +642,7 @@ async function processRepo(config: AppConfig, repo: AppConfig["repos"][number]):
   const commits = await getCommits(repoPath, repo.branches);
 
   if (commits.length === 0) {
-    const markdown = buildMarkdownReport(repoName, fallbackAnalysis([]));
+    const markdown = buildMarkdownReport(repoName, buildDeterministicAnalysis([]));
     const outputPath = await generateReport(config.outputRoot, repoName, markdown);
     return { repoName, outputPath };
   }
@@ -622,7 +652,11 @@ async function processRepo(config: AppConfig, repo: AppConfig["repos"][number]):
     analysis = await analyzeWithAI(repoName, repo.branches, commits, config.agents, config.prompt);
   } catch (error) {
     await logError(config.errorLogPath, error);
-    analysis = fallbackAnalysis(commits);
+    analysis = buildDeterministicAnalysis(commits);
+  }
+
+  if (analysis.rawResponse && analysis.rawResponseSource) {
+    await writeRawAgentLog(config.outputRoot, repoName, analysis.rawResponse, analysis.rawResponseSource);
   }
 
   const markdown = buildMarkdownReport(repoName, analysis);
