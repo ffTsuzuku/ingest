@@ -38,6 +38,7 @@ interface RawConfig {
 interface AppConfig {
   repos: Array<RepoConfig & { repo_name: Nullable<string> }>;
   outputRoot: string;
+  rawOutputRoot: string;
   errorLogPath: string;
   agents: AgentConfig;
   prompt: string;
@@ -213,6 +214,7 @@ function validateConfig(config: RawConfig, configPath: string): AppConfig {
   return {
     repos,
     outputRoot: resolvePath(config.output_root ?? DEFAULT_OUTPUT_ROOT, dirname(configPath)),
+    rawOutputRoot: dirname(configPath),
     errorLogPath: resolvePath(config.error_log ?? DEFAULT_ERROR_LOG, dirname(configPath)),
     agents,
     prompt: config.prompt?.trim() || DEFAULT_PROMPT,
@@ -550,9 +552,9 @@ async function generateReport(outputRoot: string, repoName: string, markdown: st
   return outputPath;
 }
 
-async function writeRawAgentLog(outputRoot: string, repoName: string, rawResponse: string, source: string): Promise<string> {
+async function writeRawAgentLog(rawOutputRoot: string, repoName: string, rawResponse: string, source: string): Promise<string> {
   const dateStamp = new Date().toISOString().slice(0, 10);
-  const outputDir = join(outputRoot, repoName);
+  const outputDir = join(rawOutputRoot, repoName);
   await mkdir(outputDir, { recursive: true });
   const outputPath = join(outputDir, `${dateStamp}-agent-raw.log`);
   const payload = [
@@ -656,7 +658,7 @@ async function processRepo(config: AppConfig, repo: AppConfig["repos"][number]):
   }
 
   if (analysis.rawResponse && analysis.rawResponseSource) {
-    await writeRawAgentLog(config.outputRoot, repoName, analysis.rawResponse, analysis.rawResponseSource);
+    await writeRawAgentLog(config.rawOutputRoot, repoName, analysis.rawResponse, analysis.rawResponseSource);
   }
 
   const markdown = buildMarkdownReport(repoName, analysis);

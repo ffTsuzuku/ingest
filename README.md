@@ -54,5 +54,5 @@ If `agents.opencode` is configured, the script will call the local `opencode` CL
 For each processed repo with AI output, the script also appends the full raw agent result to:
 
 ```text
-<output_root>/<repo_name>/YYYY-MM-DD-agent-raw.log
+<config_dir>/<repo_name>/YYYY-MM-DD-agent-raw.log
 ```
