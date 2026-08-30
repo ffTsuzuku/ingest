@@ -140,6 +140,29 @@ flowchart TD
     assert.ok(!plainText.includes("<br/>"));
     assert.ok(!plainText.includes("<code>"));
   });
+
+  it("should format decision diamond flowcharts with inline node definitions", () => {
+    const md = `\`\`\`mermaid
+graph TD
+    A["Scheduled Run Triggered"] --> B{"Has --expire-schedule flag?"}
+    B -- Yes --> C{"Current Date > Expiration Date?"}
+    B -- No --> D["Execute Ingest Report Generation"]
+    C -- Yes --> E["Uninstall Scheduler Plist"]
+    C -- No --> D
+\`\`\``;
+
+    const lines = renderMarkdownToAnsi(md);
+    const plainText = lines.map(stripAnsi).join("\n");
+
+    assert.ok(plainText.includes("Architecture & Execution Flow"));
+    assert.ok(plainText.includes("Scheduled Run Triggered"));
+    assert.ok(plainText.includes("Has --expire-schedule flag?"));
+    assert.ok(plainText.includes("A ────► B"));
+    assert.ok(plainText.includes("B ──[Yes]──► C"));
+    assert.ok(plainText.includes("B ──[No]──► D"));
+    assert.ok(plainText.includes("C ──[Yes]──► E"));
+    assert.ok(plainText.includes("C ──[No]──► D"));
+  });
 });
 
 

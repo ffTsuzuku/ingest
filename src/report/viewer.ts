@@ -23,27 +23,51 @@ export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): 
       .trim();
   };
 
+  const parseNodeSnippet = (snippet: string): { id: string; label?: string } | null => {
+    const m = snippet.trim().match(/^([A-Za-z0-9_-]+)(?:\["([^"]+)"\]|\[([^\]]+)\]|\{"([^"]+)"\}|\{([^}]+)\}|\(\("([^"]+)"\)\)|\(\(([^)]+)\)\)|\("([^"]+)"\)|\(([^)]+)\))?$/);
+    if (!m) return null;
+    const id = m[1]!;
+    const label = m[2] || m[3] || m[4] || m[5] || m[6] || m[7] || m[8] || m[9];
+    return { id, label: label ? cleanText(label) : undefined };
+  };
+
   for (const rawLine of codeLines) {
     const line = rawLine.trim();
     if (!line || line.startsWith("flowchart") || line.startsWith("graph") || line.startsWith("sequenceDiagram")) {
       continue;
     }
 
-    // 1. Node declarations: ID["Label<br/><code>path</code>"] or ID[Label]
-    const nodeMatch = line.match(/^([A-Za-z0-9_-]+)\s*(?:\["([^"]+)"\]|\[([^\]]+)\]|\("([^"]+)"\)|\(([^)]+)\))/);
-    if (nodeMatch) {
-      const id = nodeMatch[1]!;
-      const label = cleanText(nodeMatch[2] || nodeMatch[3] || nodeMatch[4] || nodeMatch[5] || id);
-      nodes.set(id, label);
-    }
+    // Check for arrow flow: -->, ==>, -.-> or -- label --> or |label|
+    const arrowMatch = line.match(/^(.*?)\s*(?:-->|==>|-\.->|--\s*([^->]+?)\s*-->|==\s*([^=>]+?)\s*==>|-\.\s*([^->]+?)\s*\.->)\s*(?:\|([^|]+)\|)?\s*(.*?)$/);
+    if (arrowMatch) {
+      const leftPart = arrowMatch[1] ?? "";
+      const inlineLabel = arrowMatch[2] || arrowMatch[3] || arrowMatch[4] || arrowMatch[5];
+      const rightPart = arrowMatch[6] ?? "";
 
-    // 2. Connection flows: A -->|Label| B or A --> B
-    const flowMatch = line.match(/([A-Za-z0-9_-]+)\s*(?:-->|==>|-\.->)\s*(?:\|([^|]+)\|)?\s*([A-Za-z0-9_-]+)/);
-    if (flowMatch) {
-      const from = flowMatch[1]!;
-      const label = flowMatch[2] ? cleanText(flowMatch[2]) : undefined;
-      const to = flowMatch[3]!;
-      flows.push({ from, to, label });
+      const leftNode = parseNodeSnippet(leftPart);
+      const rightNode = parseNodeSnippet(rightPart);
+
+      if (leftNode) {
+        if (leftNode.label) nodes.set(leftNode.id, leftNode.label);
+        else if (!nodes.has(leftNode.id)) nodes.set(leftNode.id, leftNode.id);
+      }
+      if (rightNode) {
+        if (rightNode.label) nodes.set(rightNode.id, rightNode.label);
+        else if (!nodes.has(rightNode.id)) nodes.set(rightNode.id, rightNode.id);
+      }
+
+      if (leftNode && rightNode) {
+        flows.push({
+          from: leftNode.id,
+          to: rightNode.id,
+          label: inlineLabel ? cleanText(inlineLabel) : undefined,
+        });
+      }
+    } else {
+      const node = parseNodeSnippet(line);
+      if (node && node.label) {
+        nodes.set(node.id, node.label);
+      }
     }
   }
 
