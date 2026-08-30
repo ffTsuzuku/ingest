@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildAnalysisPrompt, resolveRepoPrompt } from "../src/ai/prompt.js";
 import { AIFactory } from "../src/ai/factory.js";
+import { promptSelect, promptConfirm } from "../src/tui/prompt.js";
 import type { AppConfig } from "../src/config/types.js";
 
 describe("AI Prompt Builder", () => {
@@ -70,3 +71,31 @@ describe("AI Factory", () => {
     assert.ok(provider.name.includes("Antigravity"));
   });
 });
+
+describe("TUI Prompts", () => {
+  it("should return first choice in non-interactive / test mode", async () => {
+    const res = await promptSelect({
+      message: "Select an option:",
+      choices: [
+        { label: "Option 1", value: "opt1" },
+        { label: "Option 2", value: "opt2" },
+      ],
+    });
+    assert.equal(res, "opt1");
+  });
+
+  it("should handle promptConfirm without y/n input in non-interactive mode", async () => {
+    const resYes = await promptConfirm({
+      message: "Continue?",
+      defaultYes: true,
+    });
+    assert.equal(resYes, true);
+
+    const resNo = await promptConfirm({
+      message: "Continue?",
+      defaultYes: false,
+    });
+    assert.equal(resNo, false);
+  });
+});
+

@@ -11,8 +11,12 @@ export async function promptSelect<T = string>(options: {
   message: string;
   choices: SelectOption<T>[];
   defaultIndex?: number;
-}): Promise<T> {
+}): Promise<T | null> {
   const { message, choices, defaultIndex = 0 } = options;
+
+  if (choices.length === 0) {
+    return null;
+  }
 
   if (!process.stdin.isTTY) {
     // Non-interactive fallback: return first option
@@ -69,6 +73,14 @@ export async function promptSelect<T = string>(options: {
         process.exit(130);
       }
 
+      // Standalone Escape key (Esc: \x1b, length 1)
+      if (key === "\u001b" || (chunk.length === 1 && chunk[0] === 0x1b)) {
+        cleanup();
+        process.stdout.write(ANSI.clearLine + `${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${message} (Back)${ANSI.reset}\n`);
+        resolvePromise(null);
+        return;
+      }
+
       // Up arrow or k
       if (key === "\u001b[A" || key === "k") {
         selectedIndex = (selectedIndex - 1 + choices.length) % choices.length;
@@ -93,19 +105,39 @@ export async function promptText(options: {
   message: string;
   defaultValue?: string;
   validate?: (val: string) => boolean | string;
-}): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  const promptMsg = options.defaultValue
-    ? `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${options.message}${ANSI.reset} ${ANSI.gray}(${options.defaultValue})${ANSI.reset} `
-    : `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${options.message}${ANSI.reset} `;
+}): Promise<string | null> {
+  if (!process.stdin.isTTY) {
+    return options.defaultValue || "";
+  }
 
   return new Promise((resolvePromise) => {
-    rl.question(promptMsg, (answer) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    const promptMsg = options.defaultValue
+      ? `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${options.message}${ANSI.reset} ${ANSI.gray}(${options.defaultValue})${ANSI.reset} `
+      : `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${options.message}${ANSI.reset} `;
+
+    const onData = (chunk: Buffer) => {
+      // Standalone Escape key
+      if (chunk.length === 1 && chunk[0] === 0x1b) {
+        cleanup();
+        process.stdout.write(`\r${ANSI.clearLine}${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${options.message} (Back)${ANSI.reset}\n`);
+        resolvePromise(null);
+      }
+    };
+
+    const cleanup = () => {
+      process.stdin.removeListener("data", onData);
       rl.close();
+    };
+
+    process.stdin.on("data", onData);
+
+    rl.question(promptMsg, (answer) => {
+      cleanup();
       const val = answer.trim() || options.defaultValue || "";
       resolvePromise(val);
     });
@@ -116,13 +148,21 @@ export async function promptConfirm(options: {
   message: string;
   defaultYes?: boolean;
 }): Promise<boolean> {
-  const defaultHint = options.defaultYes ? "[Y/n]" : "[y/N]";
-  const text = await promptText({
-    message: `${options.message} ${ANSI.gray}${defaultHint}${ANSI.reset}`,
+  const choices: SelectOption<boolean>[] = options.defaultYes
+    ? [
+        { label: "Yes", value: true },
+        { label: "No", value: false },
+      ]
+    : [
+        { label: "No", value: false },
+        { label: "Yes", value: true },
+      ];
+
+  const result = await promptSelect<boolean>({
+    message: options.message,
+    choices,
+    defaultIndex: 0,
   });
 
-  if (!text) {
-    return options.defaultYes ?? false;
-  }
-  return text.toLowerCase().startsWith("y");
+  return result ?? false;
 }

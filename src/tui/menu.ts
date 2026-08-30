@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { ANSI, drawBox } from "./ansi.js";
-import { promptConfirm, promptSelect, promptText } from "./prompt.js";
+import { promptSelect, promptText } from "./prompt.js";
 import { showTerminalPager } from "./pager.js";
 import { ConfigManager } from "../config/manager.js";
 import type { AppConfig, RepoConfig } from "../config/types.js";
@@ -85,7 +85,7 @@ export class InteractiveTUI {
         choices,
       });
 
-      if (action === "exit") {
+      if (!action || action === "exit") {
         console.log(`\n${ANSI.gray}Goodbye! 👋${ANSI.reset}\n`);
         break;
       }
@@ -113,15 +113,6 @@ export class InteractiveTUI {
         }
       } catch (err) {
         await Logger.error("Interactive action failed", err);
-      }
-
-      const continueLoop = await promptConfirm({
-        message: "Return to main menu?",
-        defaultYes: true,
-      });
-      if (!continueLoop) {
-        console.log(`\n${ANSI.gray}Goodbye! 👋${ANSI.reset}\n`);
-        break;
       }
     }
   }
@@ -169,10 +160,19 @@ export class InteractiveTUI {
       });
     }
 
+    repoChoices.push({
+      label: "🔙 Back",
+      value: "__back__",
+    });
+
     const selectedTarget = await promptSelect({
       message: "Which repository would you like to analyze?",
       choices: repoChoices,
     });
+
+    if (!selectedTarget || selectedTarget === "__back__") {
+      return;
+    }
 
     let targetRepos: Array<RepoConfig> = [];
 
@@ -180,6 +180,7 @@ export class InteractiveTUI {
       targetRepos = ctx.config.repos;
     } else if (selectedTarget === "__custom__") {
       const customPath = await promptText({ message: "Enter absolute or relative path to git repository:" });
+      if (!customPath) return;
       const resolved = await resolveRepoPath(customPath);
       const branches = await getGitBranches(resolved);
       targetRepos = [{ path: resolved, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
@@ -201,8 +202,13 @@ export class InteractiveTUI {
         { label: "📅 Today (from 00:00 local time)", value: "today" },
         { label: "🗓️  Custom Specific Date (YYYY-MM-DD)", value: "custom_date" },
         { label: "⏳ Last 7 Days", value: "7d" },
+        { label: "🔙 Back", value: "__back__" },
       ],
     });
+
+    if (!dateChoice || dateChoice === "__back__") {
+      return;
+    }
 
     let dateStr = new Date().toISOString().slice(0, 10);
     const dateFilter: { since?: string; until?: string; sinceHours?: number } = {};
@@ -214,18 +220,30 @@ export class InteractiveTUI {
     } else if (dateChoice === "7d") {
       dateFilter.since = "7 days ago";
     } else if (dateChoice === "custom_date") {
-      dateStr = await promptText({
+      const customDateStr = await promptText({
         message: "Enter date (YYYY-MM-DD):",
         defaultValue: dateStr,
       });
+      if (!customDateStr) return;
+      dateStr = customDateStr;
       dateFilter.since = `${dateStr} 00:00:00`;
       dateFilter.until = `${dateStr} 23:59:59`;
     }
 
-    const diffDeepDive = await promptConfirm({
-      message: "Enable Git Diff Deep-Dive mode (inspect code diff stats & impacted files)?",
-      defaultYes: true,
+    const diffChoice = await promptSelect({
+      message: "Select analysis depth:",
+      choices: [
+        { label: "🔍 Diff Deep-Dive (Inspect code diff stats & file changes)", value: "deep", hint: "Recommended" },
+        { label: "⚡ Standard Log (Commit messages & metadata only)", value: "standard" },
+        { label: "🔙 Back", value: "__back__" },
+      ],
     });
+
+    if (!diffChoice || diffChoice === "__back__") {
+      return;
+    }
+
+    const diffDeepDive = diffChoice === "deep";
 
     console.log(`\n${ANSI.cyan}Analyzing repositories...${ANSI.reset}`);
 
@@ -280,170 +298,184 @@ export class InteractiveTUI {
       const saved = await ReportStorage.saveReport(ctx.config.outputRoot, reportMeta, reportMarkdown);
       console.log(`  ${ANSI.green}✔ Report saved to:${ANSI.reset} ${saved.filePath}`);
 
-      const shouldView = await promptConfirm({
-        message: `View generated report for "${repoName}" now?`,
-        defaultYes: true,
-      });
-
-      if (shouldView) {
-        const ansiLines = renderMarkdownToAnsi(reportMarkdown);
-        await showTerminalPager(ansiLines, `${repoName} - ${dateStr}`);
-      }
+      const ansiLines = renderMarkdownToAnsi(reportMarkdown);
+      await showTerminalPager(ansiLines, `${repoName} - ${dateStr}`);
     }
   }
 
   private static async handleViewReports(ctx: MenuContext): Promise<void> {
-    console.log(`\n${ANSI.bold}${ANSI.yellow}=== Report Explorer & Viewer ===${ANSI.reset}\n`);
+    while (true) {
+      console.log(`\n${ANSI.bold}${ANSI.yellow}=== Report Explorer & Viewer ===${ANSI.reset}\n`);
 
-    const reports = await ReportStorage.listReports(ctx.config.outputRoot);
-    if (reports.length === 0) {
-      console.log(`  ${ANSI.yellow}No reports found in ${ctx.config.outputRoot}.${ANSI.reset}`);
-      return;
-    }
+      const reports = await ReportStorage.listReports(ctx.config.outputRoot);
+      if (reports.length === 0) {
+        console.log(`  ${ANSI.yellow}No reports found in ${ctx.config.outputRoot}.${ANSI.reset}`);
+        return;
+      }
 
-    const choices = reports.slice(0, 30).map((r) => ({
-      label: `📄 ${r.repoName} [${r.dateStr}]`,
-      value: r.filePath,
-      hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
-    }));
+      const choices = reports.slice(0, 30).map((r) => ({
+        label: `📄 ${r.repoName} [${r.dateStr}]`,
+        value: r.filePath,
+        hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
+      }));
 
-    choices.push({
-      label: "🔙 Back",
-      value: "__back__",
-      hint: "",
-    });
+      choices.push({
+        label: "🔙 Back",
+        value: "__back__",
+        hint: "",
+      });
 
-    const chosenFile = await promptSelect({
-      message: "Select a report to view in terminal pager:",
-      choices,
-    });
+      const chosenFile = await promptSelect({
+        message: "Select a report to view in terminal pager:",
+        choices,
+      });
 
-    if (chosenFile !== "__back__") {
+      if (!chosenFile || chosenFile === "__back__") {
+        return;
+      }
+
       const renderedLines = await renderReportFileToAnsi(chosenFile);
       await showTerminalPager(renderedLines, chosenFile.split("/").pop() || "Report");
     }
   }
 
   private static async handleSchedulerWizard(ctx: MenuContext): Promise<void> {
-    console.log(`\n${ANSI.bold}${ANSI.yellow}=== Scheduler Wizard ===${ANSI.reset}\n`);
+    while (true) {
+      console.log(`\n${ANSI.bold}${ANSI.yellow}=== Scheduler Wizard ===${ANSI.reset}\n`);
 
-    const isMac = LaunchdScheduler.isMacOS();
-    const cronStatus = await CronScheduler.getStatus();
-    const launchdStatus = isMac ? await LaunchdScheduler.getStatus() : null;
+      const isMac = LaunchdScheduler.isMacOS();
+      const cronStatus = await CronScheduler.getStatus();
+      const launchdStatus = isMac ? await LaunchdScheduler.getStatus() : null;
 
-    console.log(`  ${ANSI.bold}System Scheduling Status:${ANSI.reset}`);
-    if (isMac) {
-      console.log(`  • macOS LaunchAgent: ${launchdStatus?.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${launchdStatus?.details})`);
-    }
-    console.log(`  • Crontab: ${cronStatus.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${cronStatus.details})\n`);
+      console.log(`  ${ANSI.bold}System Scheduling Status:${ANSI.reset}`);
+      if (isMac) {
+        console.log(`  • macOS LaunchAgent: ${launchdStatus?.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${launchdStatus?.details})`);
+      }
+      console.log(`  • Crontab: ${cronStatus.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${cronStatus.details})\n`);
 
-    const choices = [
-      { label: "🚀 Install / Update Daily Report Schedule", value: "install" },
-      { label: "🛑 Remove / Disable Automated Schedules", value: "uninstall" },
-      { label: "🔙 Back to Main Menu", value: "back" },
-    ];
+      const choices = [
+        { label: "🚀 Install / Update Daily Report Schedule", value: "install" },
+        { label: "🛑 Remove / Disable Automated Schedules", value: "uninstall" },
+        { label: "🔙 Back", value: "back" },
+      ];
 
-    const action = await promptSelect({
-      message: "Select schedule operation:",
-      choices,
-    });
-
-    if (action === "back") return;
-
-    if (action === "uninstall") {
-      await CronScheduler.uninstall();
-      if (isMac) await LaunchdScheduler.uninstall();
-      Logger.success("Automated schedules successfully removed.");
-      return;
-    }
-
-    if (action === "install") {
-      const targetEngine = isMac
-        ? await promptSelect({
-            message: "Select automation engine:",
-            choices: [
-              { label: "🍏 macOS LaunchAgent (Recommended for Mac)", value: "launchd" },
-              { label: "⚙️  Standard Crontab", value: "cron" },
-            ],
-          })
-        : "cron";
-
-      const timeInput = await promptText({
-        message: "Enter run time in 24-hour format (HH:MM):",
-        defaultValue: "00:00",
+      const action = await promptSelect({
+        message: "Select schedule operation:",
+        choices,
       });
 
-      const schedConfig = {
-        frequency: "daily" as const,
-        time: timeInput,
-        configPath: ctx.config.configPath,
-      };
+      if (!action || action === "back") return;
 
-      if (targetEngine === "launchd") {
-        await LaunchdScheduler.install(schedConfig);
-        Logger.success(`macOS LaunchAgent installed to run daily at ${timeInput}.`);
-      } else {
-        await CronScheduler.install(schedConfig);
-        Logger.success(`Crontab job installed to run daily at ${timeInput}.`);
+      if (action === "uninstall") {
+        await CronScheduler.uninstall();
+        if (isMac) await LaunchdScheduler.uninstall();
+        Logger.success("Automated schedules successfully removed.");
+        return;
+      }
+
+      if (action === "install") {
+        const targetEngine = isMac
+          ? await promptSelect({
+              message: "Select automation engine:",
+              choices: [
+                { label: "🍏 macOS LaunchAgent (Recommended for Mac)", value: "launchd" },
+                { label: "⚙️  Standard Crontab", value: "cron" },
+                { label: "🔙 Back", value: "back" },
+              ],
+            })
+          : "cron";
+
+        if (!targetEngine || targetEngine === "back") continue;
+
+        const timeInput = await promptText({
+          message: "Enter run time in 24-hour format (HH:MM):",
+          defaultValue: "00:00",
+        });
+
+        if (!timeInput) continue;
+
+        const schedConfig = {
+          frequency: "daily" as const,
+          time: timeInput,
+          configPath: ctx.config.configPath,
+        };
+
+        if (targetEngine === "launchd") {
+          await LaunchdScheduler.install(schedConfig);
+          Logger.success(`macOS LaunchAgent installed to run daily at ${timeInput}.`);
+        } else {
+          await CronScheduler.install(schedConfig);
+          Logger.success(`Crontab job installed to run daily at ${timeInput}.`);
+        }
+        return;
       }
     }
   }
 
   private static async handleRepoSettings(ctx: MenuContext): Promise<void> {
-    console.log(`\n${ANSI.bold}${ANSI.yellow}=== Repository & Custom Prompts Settings ===${ANSI.reset}\n`);
+    while (true) {
+      console.log(`\n${ANSI.bold}${ANSI.yellow}=== Repository & Custom Prompts Settings ===${ANSI.reset}\n`);
 
-    console.log(`  Current Config File: ${ANSI.cyan}${ctx.config.configPath}${ANSI.reset}`);
-    console.log(`  Output Root Directory: ${ANSI.cyan}${ctx.config.outputRoot}${ANSI.reset}`);
-    console.log(`  Default AI Provider: ${ANSI.cyan}${ctx.config.defaultProvider}${ANSI.reset}\n`);
+      console.log(`  Current Config File: ${ANSI.cyan}${ctx.config.configPath}${ANSI.reset}`);
+      console.log(`  Output Root Directory: ${ANSI.cyan}${ctx.config.outputRoot}${ANSI.reset}`);
+      console.log(`  Default AI Provider: ${ANSI.cyan}${ctx.config.defaultProvider}${ANSI.reset}\n`);
 
-    const action = await promptSelect({
-      message: "What would you like to configure?",
-      choices: [
-        { label: "➕ Add Current Directory to Monitored Repos", value: "add_cwd" },
-        { label: "📝 Edit Default AI Prompt Template", value: "edit_prompt" },
-        { label: "🔄 Switch Default AI Provider (Opencode / Gemini CLI)", value: "switch_provider" },
-        { label: "🔙 Back", value: "back" },
-      ],
-    });
-
-    if (action === "add_cwd" && ctx.currentRepoPath) {
-      const exists = ctx.config.repos.some((r) => r.path === ctx.currentRepoPath);
-      if (exists) {
-        Logger.warn("Current repository is already in the configuration.");
-      } else {
-        const branches = await getGitBranches(ctx.currentRepoPath);
-        const detectedName = await getRepoName(ctx.currentRepoPath);
-        ctx.config.repos.push({
-          path: ctx.currentRepoPath,
-          repo_name: detectedName,
-          branches: branches.length > 0 ? branches.slice(0, 2) : ["main"],
-          custom_prompt: null,
-          custom_prompt_file: null,
-          diff_mode: true,
-          max_diff_lines: 200,
-        });
-        await ConfigManager.save(ctx.config);
-        Logger.success(`Added ${ctx.currentRepoPath} to monitored repositories.`);
-      }
-    } else if (action === "edit_prompt") {
-      const newPrompt = await promptText({
-        message: "Enter new default prompt:",
-        defaultValue: ctx.config.prompt,
-      });
-      ctx.config.prompt = newPrompt;
-      await ConfigManager.save(ctx.config);
-      Logger.success("Default prompt updated.");
-    } else if (action === "switch_provider") {
-      const newProvider = await promptSelect<"antigravity" | "opencode" | "gemini-cli">({
-        message: "Select default AI provider:",
+      const action = await promptSelect({
+        message: "What would you like to configure?",
         choices: [
-          { label: "Antigravity CLI (agy)", value: "antigravity" },
-          { label: "Opencode CLI (Local/OpenAI)", value: "opencode" },
+          { label: "➕ Add Current Directory to Monitored Repos", value: "add_cwd" },
+          { label: "📝 Edit Default AI Prompt Template", value: "edit_prompt" },
+          { label: "🔄 Switch Default AI Provider (Opencode / Gemini CLI)", value: "switch_provider" },
+          { label: "🔙 Back", value: "back" },
         ],
       });
-      ctx.config.defaultProvider = newProvider;
-      await ConfigManager.save(ctx.config);
-      Logger.success(`Default AI provider set to "${newProvider}".`);
+
+      if (!action || action === "back") return;
+
+      if (action === "add_cwd" && ctx.currentRepoPath) {
+        const exists = ctx.config.repos.some((r) => r.path === ctx.currentRepoPath);
+        if (exists) {
+          Logger.warn("Current repository is already in the configuration.");
+        } else {
+          const branches = await getGitBranches(ctx.currentRepoPath);
+          const detectedName = await getRepoName(ctx.currentRepoPath);
+          ctx.config.repos.push({
+            path: ctx.currentRepoPath,
+            repo_name: detectedName,
+            branches: branches.length > 0 ? branches.slice(0, 2) : ["main"],
+            custom_prompt: null,
+            custom_prompt_file: null,
+            diff_mode: true,
+            max_diff_lines: 200,
+          });
+          await ConfigManager.save(ctx.config);
+          Logger.success(`Added ${ctx.currentRepoPath} to monitored repositories.`);
+        }
+      } else if (action === "edit_prompt") {
+        const newPrompt = await promptText({
+          message: "Enter new default prompt:",
+          defaultValue: ctx.config.prompt,
+        });
+        if (newPrompt !== null) {
+          ctx.config.prompt = newPrompt;
+          await ConfigManager.save(ctx.config);
+          Logger.success("Default prompt updated.");
+        }
+      } else if (action === "switch_provider") {
+        const newProvider = await promptSelect<"antigravity" | "opencode" | "gemini-cli">({
+          message: "Select default AI provider:",
+          choices: [
+            { label: "Antigravity CLI (agy)", value: "antigravity" },
+            { label: "Opencode CLI (Local/OpenAI)", value: "opencode" },
+            { label: "🔙 Back", value: "back" as any },
+          ],
+        });
+        if (newProvider && (newProvider as string) !== "back") {
+          ctx.config.defaultProvider = newProvider;
+          await ConfigManager.save(ctx.config);
+          Logger.success(`Default AI provider set to "${newProvider}".`);
+        }
+      }
     }
   }
 
@@ -454,8 +486,11 @@ export class InteractiveTUI {
       choices: [
         { label: "🌐 Global Agent Directory (~/.gemini/config/skills/ingest/)", value: "global" },
         { label: "📁 Local Workspace Directory (.agents/skills/ingest/)", value: "workspace" },
+        { label: "🔙 Back", value: "back" },
       ],
     });
+
+    if (!target || target === "back") return;
 
     if (target === "global") {
       const path = await SkillInstaller.installGlobal();

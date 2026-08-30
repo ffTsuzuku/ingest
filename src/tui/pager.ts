@@ -56,7 +56,7 @@ export async function showTerminalPager(rawLines: string[], title = "Report View
 
       // Footer status bar
       const percent = totalLines > 0 ? Math.round((endLineNum / totalLines) * 100) : 100;
-      const footerContent = ` (↑/↓ or j/k: Scroll | Space/b: Page | g/G: Top/End | q: Exit)  [${percent}%]`;
+      const footerContent = ` (↑/↓ or j/k: Scroll | Space/b: Page | g/G: Top/End | q/Esc: Back)  [${percent}%]`;
       const footerPad = Math.max(0, width - visibleLength(footerContent));
       output.push(`${ANSI.bgGray}${ANSI.white}${footerContent}${" ".repeat(footerPad)}${ANSI.reset}`);
 
