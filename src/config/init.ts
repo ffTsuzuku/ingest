@@ -59,7 +59,7 @@ export class ConfigInitWizard {
       console.log(`  ${ANSI.cyan}• AI Engine:${ANSI.reset}     Antigravity (agy), Opencode (OpenAI/Local LLMs), or Gemini CLI`);
       console.log(`  ${ANSI.cyan}• Git Tracking:${ANSI.reset}  Target branches, commit history, and diff deep-dive limits`);
       console.log(`  ${ANSI.cyan}• Review Focus:${ANSI.reset}  Engineering architecture, release notes, security, or custom`);
-      console.log(`  ${ANSI.cyan}• Report Store:${ANSI.reset}  Hierarchical markdown storage (<output_root>/<repo>/<date>.md)`);
+      console.log(`  ${ANSI.cyan}• Report Store:${ANSI.reset}  Hierarchical markdown storage & 30-day auto-retention policy`);
       console.log(`  ${ANSI.cyan}• Daily Sched:${ANSI.reset}   macOS LaunchAgent or Linux crontab background runner\n`);
 
       const modeChoice = await promptSelect({
@@ -158,6 +158,7 @@ export class ConfigInitWizard {
 // • branches: Target Git branches to analyze for commit activity
 // • diff_mode: When true, extracts git diff stats & line changes (+/-)
 // • max_diff_lines: Max patch lines per commit sent to AI context
+// • retention_days: Report retention expiration in days (default: 30, 0 = keep forever)
 // • default_provider: "antigravity" | "opencode" | "gemini-cli"
 // • prompt: System prompt instructions guiding AI summary generation
 {
@@ -165,6 +166,7 @@ export class ConfigInitWizard {
   "branches": ${JSON.stringify(activeBranches)},
   "diff_mode": true,
   "max_diff_lines": 200,
+  "retention_days": 30,
   "default_provider": "antigravity",
   "prompt": "${DEFAULT_PROMPT}"
 }
@@ -212,6 +214,7 @@ export class ConfigInitWizard {
 // SETTINGS REFERENCE:
 // • repos: List of repositories to analyze in headless multi-repo runs
 // • output_root: Destination folder for markdown reports (<root>/<repo>/YYYY-MM-DD-summary.md)
+// • retention_days: Automatic report retention period in days (default: 30, 0 = keep forever)
 // • error_log: Path for recording non-fatal error traces (default: error.log)
 // • default_provider: Default AI backend ("antigravity" | "opencode" | "gemini-cli")
 // • provider: Custom provider configs (endpoints, model overrides, tokens)
@@ -219,6 +222,7 @@ export class ConfigInitWizard {
 {
   "repos": ${JSON.stringify(defaultRepos, null, 4)},
   "output_root": "~/reports",
+  "retention_days": 30,
   "error_log": "error.log",
   "default_provider": "antigravity",
   "provider": {
@@ -392,14 +396,14 @@ export class ConfigInitWizard {
       finalPrompt = customInput.trim() || DEFAULT_PROMPT;
     }
 
-    console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 4: Report Storage Destination (output_root, error_log) ──${ANSI.reset}`);
+    console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 4: Report Storage & Expiration (output_root, retention_days, error_log) ──${ANSI.reset}`);
     console.log(
-      `  ${ANSI.dim}Specify where generated Markdown summaries and error logs will be stored.${ANSI.reset}\n`,
+      `  ${ANSI.dim}Specify where generated Markdown summaries are stored and how long they are retained.${ANSI.reset}\n`,
     );
-    console.log(`  ${ANSI.bold}Storage Hierarchy:${ANSI.reset}`);
+    console.log(`  ${ANSI.bold}Storage & Retention Settings:${ANSI.reset}`);
     console.log(`  ${ANSI.yellow}• Daily Reports:${ANSI.reset}   ${ANSI.cyan}<output_root>/<repo_name>/YYYY-MM-DD-summary.md${ANSI.reset}`);
     console.log(`  ${ANSI.green}• Date Ranges:${ANSI.reset}     ${ANSI.cyan}<output_root>/<repo_name>/YYYY-MM-DD-to-YYYY-MM-DD-summary.md${ANSI.reset}`);
-    console.log(`  ${ANSI.blue}• Autocompletion:${ANSI.reset}  Type ~ or directory paths and press <Tab> to autocomplete.\n`);
+    console.log(`  ${ANSI.blue}• Expiration:${ANSI.reset}      Automatically prune reports older than N days (default: 30, 0 = keep forever).\n`);
 
     const defaultOutput = isLocal ? "./reports" : "~/reports";
     const outputInput = await promptText({
@@ -409,6 +413,14 @@ export class ConfigInitWizard {
     });
     if (outputInput === null) return null;
     const outputRoot = outputInput.trim() || defaultOutput;
+
+    const retentionInput = await promptText({
+      message: "Report retention period in days (retention_days, 0 = keep forever):",
+      defaultValue: "30",
+    });
+    if (retentionInput === null) return null;
+    const retentionDays = parseInt(retentionInput.trim(), 10);
+    const validRetentionDays = !isNaN(retentionDays) && retentionDays >= 0 ? retentionDays : 30;
 
     // Optional Step 5: Scheduler setup
     let scheduleInstalled = false;
@@ -471,6 +483,7 @@ export class ConfigInitWizard {
         branches: branches.length > 0 ? branches : ["main"],
         diff_mode: diffMode,
         max_diff_lines: maxDiffLines,
+        retention_days: validRetentionDays,
         default_provider: providerChoice,
         prompt: finalPrompt,
       };
@@ -496,6 +509,7 @@ export class ConfigInitWizard {
 // • branches: Target Git branches to analyze for commit activity
 // • diff_mode: When true, extracts git diff stats & line changes (+/-)
 // • max_diff_lines: Max patch lines per commit sent to AI context
+// • retention_days: Report retention expiration in days (default: 30, 0 = keep forever)
 // • default_provider: "antigravity" | "opencode" | "gemini-cli"
 // • prompt: System prompt instructions guiding AI summary generation
 ${JSON.stringify(configObj, null, 2)}
@@ -536,6 +550,7 @@ ${JSON.stringify(configObj, null, 2)}
     const globalObj: Record<string, unknown> = {
       repos,
       output_root: outputRoot,
+      retention_days: validRetentionDays,
       error_log: "error.log",
       default_provider: providerChoice,
       provider: {
@@ -557,16 +572,17 @@ ${JSON.stringify(configObj, null, 2)}
 // SETTINGS REFERENCE:
 // • repos: List of repositories to analyze in headless multi-repo runs
 // • output_root: Destination folder for markdown reports (<root>/<repo>/YYYY-MM-DD-summary.md)
+// • retention_days: Automatic report retention period in days (default: 30, 0 = keep forever)
 // • error_log: Path for recording non-fatal error traces (default: error.log)
 // • default_provider: Default AI backend ("antigravity" | "opencode" | "gemini-cli")
 // • provider: Custom provider configs (endpoints, model overrides, tokens)
 // • prompt: Default engineering analysis prompt template
 ${JSON.stringify(globalObj, null, 2)}
 `;
-    await writeFile(targetFilePath, content, "utf8");
-    this.printSuccessCard(targetFilePath, "Global configuration saved successfully to ~/.config/ingest/config.jsonc.");
-    return targetFilePath;
-  }
+      await writeFile(targetFilePath, content, "utf8");
+      this.printSuccessCard(targetFilePath, "Global configuration saved successfully to ~/.config/ingest/config.jsonc.");
+      return targetFilePath;
+    }
 
   private static printSuccessCard(filePath: string, message: string): void {
     const cardLines = [

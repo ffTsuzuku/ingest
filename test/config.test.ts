@@ -106,6 +106,27 @@ describe("Local Repository Configuration", () => {
       assert.equal(loadedConfig.defaultProvider, "opencode");
       assert.equal(loadedConfig.prompt, "Local project prompt override");
       assert.ok(loadedConfig.outputRoot.endsWith("custom-reports"));
+      assert.equal(loadedConfig.retentionDays, 30); // default retention
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should parse and load custom retention_days setting", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-test-"));
+    try {
+      const configPath = join(tempDir, ".ingestrc");
+      await writeFile(
+        configPath,
+        `{\n  "repo_name": "test-repo",\n  "retention_days": 14\n}\n`,
+        "utf8",
+      );
+
+      const loaded = await loadLocalConfig(tempDir);
+      assert.equal(loaded?.retention_days, 14);
+
+      const loadedConfig = await ConfigManager.load(undefined, tempDir);
+      assert.equal(loadedConfig.retentionDays, 14);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

@@ -11,6 +11,7 @@
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
 - ⏰ **Automated Schedulers (macOS LaunchAgent + Linux Cron)**: Install, manage, test, and inspect recurring daily report jobs seamlessly.
 - 🤖 **Global AI Skill Deployment**: Installs standard AI skill files (`skills/ingest/SKILL.md`) to `~/.gemini/config/skills/ingest/` so AI assistants can directly assist users.
+- 🧹 **Report Expiration & Auto-Cleanup**: Configurable retention window (default 30 days) automatically prunes older markdown reports during generation or via manual pruning (`--clean-expired`).
 - ⚙️ **JSONC Configuration**: Clean configuration with comment support, custom prompt templates per repo, and support for Antigravity CLI, Opencode CLI, and Gemini CLI.
 
 ---
@@ -69,6 +70,11 @@ ingest --repo /path/to/repo --since 2026-04-01 --until 2026-04-07
 # Enable deep-dive code diff analysis
 ingest --repo /path/to/repo --diff
 
+# Prune expired reports (default: older than 30 days)
+ingest clean
+ingest clean --days 14
+ingest --clean
+
 # View any markdown report in the terminal pager
 ingest --view ~/reports/my-repo/2026-04-05-summary.md
 
@@ -87,8 +93,8 @@ ingest --schedule-remove
 
 `ingest` supports a hierarchical configuration system:
 
-1. **Global Configuration** (`~/.config/ingest/config.jsonc`): Defines machine-wide defaults, AI provider settings, output directories, and default repository lists.
-2. **Local Repository Configuration** (`.ingestrc` or `ingest.config.jsonc` in any repo root): Overrides target branches, custom prompts, diff limits, or output directories specific to that repository.
+1. **Global Configuration** (`~/.config/ingest/config.jsonc`): Defines machine-wide defaults, AI provider settings, output directories, report expiration periods, and default repository lists.
+2. **Local Repository Configuration** (`.ingestrc` or `ingest.config.jsonc` in any repo root): Overrides target branches, custom prompts, diff limits, retention periods, or output directories specific to that repository.
 
 ### Global Configuration (`~/.config/ingest/config.jsonc`)
 
@@ -104,6 +110,7 @@ ingest --schedule-remove
     }
   ],
   "output_root": "~/reports",
+  "retention_days": 30, // Report retention period in days (0 = keep forever)
   "error_log": "error.log",
   "default_provider": "antigravity",
   "provider": {
@@ -131,7 +138,8 @@ Place `.ingestrc` in the root of your project to specify repo-specific review ru
   "branches": ["main", "feature/next"],
   "custom_prompt": "Focus on API contract breaking changes and database schema migrations.",
   "diff_mode": true,
-  "max_diff_lines": 300
+  "max_diff_lines": 300,
+  "retention_days": 30
 }
 ```
 

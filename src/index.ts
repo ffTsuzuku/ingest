@@ -23,6 +23,8 @@ import { ANSI } from "./tui/ansi.js";
 interface ParsedArgs {
   configPath?: string;
   outputRoot?: string;
+  retentionDays?: number;
+  cleanExpired?: boolean;
   repoPath?: string;
   dateStr?: string;
   sinceStr?: string;
@@ -62,6 +64,19 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.localInit = true;
     } else if (arg === "--global") {
       result.globalInit = true;
+    } else if (
+      arg === "clean" ||
+      arg === "cleanup" ||
+      arg === "prune" ||
+      arg === "--clean" ||
+      arg === "--cleanup" ||
+      arg === "--clean-expired" ||
+      arg === "--clean-reports" ||
+      arg === "--prune"
+    ) {
+      result.cleanExpired = true;
+    } else if ((arg === "--retention-days" || arg === "--days" || arg === "-d") && i + 1 < args.length) {
+      result.retentionDays = parseInt(args[++i] ?? "30", 10);
     } else if (arg === "--config" && i + 1 < args.length) {
       result.configPath = args[++i];
     } else if (arg === "--output-root" && i + 1 < args.length) {
@@ -106,12 +121,14 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest                              Launch interactive TUI
   ingest --init                       Interactive configuration setup wizard
   ingest --init --quick               Quick setup with intelligent defaults (.ingestrc)
+  ingest clean [--days <N>]           Clean up / prune expired reports (default 30 days)
   ingest [config-path]                Run headless generation for all repos in config
   ingest --repo <path>                Run report for a single repository
   ingest --date <YYYY-MM-DD>          Generate report for a specific date
   ingest --date <start>..<end>        Generate report for a date range (e.g. 2026-08-01..2026-08-07)
   ingest --since <date> --until <date> Generate report for a custom date range
   ingest --diff                       Enable Git diff deep-dive analysis
+  ingest --clean                      Prune expired reports past retention period
   ingest --view <report.md>           View markdown report in terminal pager
   ingest --install-skill              Deploy AI skill to ~/.gemini/config/skills/ingest/
   ingest --schedule-install           Install automated daily scheduler (launchd / cron)
@@ -124,8 +141,11 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   --local                     Target local repo configuration (.ingestrc)
   --global                    Target global configuration (~/.config/ingest/config.jsonc)
   -i, --interactive           Force interactive TUI mode
+  --clean, clean              Prune expired reports older than retention period
+  -d, --days <N>              Override expiration retention window in days (default: 30)
   --config <path>             Path to custom config.jsonc
   --output-root <path>        Override report output directory
+  --retention-days <days>     Report expiration retention period in days (default: 30, 0 = keep forever)
   --date <date|range>         Specific date (YYYY-MM-DD) or range (YYYY-MM-DD..YYYY-MM-DD)
   --since <date>              Start date for commit history
   --until <date>              End date for commit history
@@ -139,6 +159,9 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   const config = await ConfigManager.load(parsed.configPath);
   if (parsed.outputRoot) {
     config.outputRoot = resolve(parsed.outputRoot);
+  }
+  if (parsed.retentionDays !== undefined) {
+    config.retentionDays = parsed.retentionDays;
   }
 
   const resolvedDate = resolveDateFilter({
@@ -235,6 +258,14 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       await Logger.error(`Failed to generate report for ${repo.path}`, err);
     }
   }
+
+  // Automatic report cleanup if retention period configured
+  if (config.retentionDays > 0) {
+    const deleted = await ReportStorage.cleanExpiredReports(config.outputRoot, config.retentionDays);
+    if (deleted.length > 0) {
+      Logger.info(`Cleaned up ${deleted.length} expired report(s) (> ${config.retentionDays} days old).`);
+    }
+  }
 }
 
 export async function main(): Promise<void> {
@@ -258,6 +289,25 @@ export async function main(): Promise<void> {
 
   if (parsed.installSkill) {
     await SkillInstaller.installGlobal();
+    return;
+  }
+
+  if (parsed.cleanExpired) {
+    const config = await ConfigManager.load(parsed.configPath);
+    if (parsed.outputRoot) {
+      config.outputRoot = resolve(parsed.outputRoot);
+    }
+    const days = parsed.retentionDays !== undefined ? parsed.retentionDays : config.retentionDays;
+    console.log(`\x1b[36mCleaning expired reports in ${config.outputRoot} (> ${days} days old)...\x1b[0m`);
+    const deleted = await ReportStorage.cleanExpiredReports(config.outputRoot, days);
+    if (deleted.length === 0) {
+      Logger.info("No expired reports found.");
+    } else {
+      Logger.success(`Cleaned up ${deleted.length} expired report(s):`);
+      for (const p of deleted) {
+        console.log(`  \x1b[90m- ${p}\x1b[0m`);
+      }
+    }
     return;
   }
 

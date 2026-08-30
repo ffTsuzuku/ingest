@@ -57,6 +57,7 @@ describe("AI Factory", () => {
       repos: [],
       outputRoot: "/tmp/reports",
       rawOutputRoot: "/tmp/reports",
+      retentionDays: 30,
       errorLogPath: "/tmp/error.log",
       defaultProvider: "antigravity",
       providers: {

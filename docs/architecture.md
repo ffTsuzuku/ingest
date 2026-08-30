@@ -34,10 +34,10 @@ graph TD
 ## 2. Module Responsibilities
 
 ### 2.1. `src/config/`
-- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, and `RawConfig`.
+- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, and `RawConfig` (including `retention_days` expiration settings).
 - **`parser.ts`**: Pure zero-dependency JSONC parser supporting single-line `//`, block `/* ... */` comments, and trailing commas.
 - **`manager.ts`**: Implements hierarchical configuration loading. Discovers global defaults (`~/.config/ingest/config.jsonc`) and local per-repository configurations (`.ingestrc`, `ingest.config.jsonc`, `.ingest.json`), merges overrides gracefully, and supports persistent updates.
-- **`init.ts`**: Interactive and quick configuration initialization wizard (`ConfigInitWizard`). Guides developers through AI provider selection, branch discovery, prompt presets, diff limits, and optional scheduler installation.
+- **`init.ts`**: Interactive and quick configuration initialization wizard (`ConfigInitWizard`). Guides developers through AI provider selection, branch discovery, prompt presets, diff limits, report storage & retention, and optional scheduler installation.
 
 ### 2.2. `src/git/`
 - **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, lists local/remote branches, and infers canonical repository names (via Git remote origin URLs, worktree common directories, or folder paths).
@@ -54,7 +54,7 @@ graph TD
 
 ### 2.4. `src/report/`
 - **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown.
-- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, and scans past reports.
+- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports, and prunes expired reports based on configured retention window (`cleanExpiredReports`).
 - **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting and a keyboard-navigable scroll pager.
 
 ### 2.5. `src/scheduler/`

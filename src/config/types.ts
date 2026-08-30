@@ -33,6 +33,7 @@ export interface ProviderConfigMap {
 export interface RawConfig {
   repos?: RepoConfig[];
   output_root?: string;
+  retention_days?: number;
   error_log?: string;
   provider?: ProviderConfigMap;
   agents?: ProviderConfigMap;
@@ -50,6 +51,7 @@ export interface LocalRepoConfig {
   diff_mode?: boolean;
   max_diff_lines?: number;
   output_root?: string;
+  retention_days?: number;
   error_log?: string;
   provider?: ProviderConfigMap;
   agents?: ProviderConfigMap;
@@ -63,6 +65,7 @@ export interface AppConfig {
   repos: Array<RepoConfig & { repo_name: Nullable<string>; branches: string[] }>;
   outputRoot: string;
   rawOutputRoot: string;
+  retentionDays: number;
   errorLogPath: string;
   providers: ProviderConfigMap;
   defaultProvider: "antigravity" | "opencode" | "gemini-cli" | "agy";

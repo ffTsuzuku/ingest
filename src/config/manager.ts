@@ -11,6 +11,7 @@ export const DEFAULT_CONFIG_DIR = join(homedir(), ".config", "ingest");
 export const DEFAULT_CONFIG_PATH = join(DEFAULT_CONFIG_DIR, "config.jsonc");
 export const LEGACY_CONFIG_PATH = join(homedir(), ".config", "git-ingest", "config.jsonc");
 export const DEFAULT_OUTPUT_ROOT = join(homedir(), "reports");
+export const DEFAULT_RETENTION_DAYS = 30;
 export const DEFAULT_ERROR_LOG = "error.log";
 export const DEFAULT_PROMPT =
   "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact.";
@@ -130,6 +131,7 @@ export class ConfigManager {
 //   - max_diff_lines: Max patch lines per commit sent to AI context (default: 200)
 //   - custom_prompt: Custom review instructions for this repo
 // • output_root: Destination directory for reports (<root>/<repo>/YYYY-MM-DD-summary.md)
+// • retention_days: Automatic report retention period in days (default: 30, 0 = keep forever)
 // • error_log: File path for recording non-fatal error traces (default: error.log)
 // • default_provider: Default AI backend ("antigravity" | "opencode" | "gemini-cli")
 // • provider: AI backend options (endpoints, model overrides, auth env vars)
@@ -146,6 +148,7 @@ export class ConfigManager {
     // }
   ],
   "output_root": "~/reports",
+  "retention_days": 30,
   "error_log": "error.log",
   "default_provider": "antigravity",
   "provider": {
@@ -243,6 +246,12 @@ export class ConfigManager {
 
     const rawOutputRoot = localCwdConfig?.output_root || rawConfig.output_root || DEFAULT_OUTPUT_ROOT;
     const outputRoot = resolveConfiguredPath(rawOutputRoot, configDir);
+    const retentionDays =
+      typeof localCwdConfig?.retention_days === "number"
+        ? localCwdConfig.retention_days
+        : typeof rawConfig.retention_days === "number"
+          ? rawConfig.retention_days
+          : DEFAULT_RETENTION_DAYS;
     const rawErrorLog = localCwdConfig?.error_log || rawConfig.error_log || DEFAULT_ERROR_LOG;
     const errorLogPath = resolveConfiguredPath(rawErrorLog, configDir);
     const providers = {
@@ -263,6 +272,7 @@ export class ConfigManager {
       repos,
       outputRoot,
       rawOutputRoot,
+      retentionDays,
       errorLogPath,
       providers,
       defaultProvider,
@@ -277,6 +287,7 @@ export class ConfigManager {
       {
         repos: config.repos,
         output_root: config.rawOutputRoot,
+        retention_days: config.retentionDays,
         error_log: config.errorLogPath,
         default_provider: config.defaultProvider,
         provider: config.providers,

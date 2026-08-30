@@ -43,7 +43,15 @@ description: >-
      ingest --view /path/to/report.md
      ```
 
-4. **Automated Scheduling (macOS launchd & Linux Cron)**:
+4. **Report Expiration & Maintenance**:
+   - Prune expired reports based on configured retention period (default: 30 days):
+     ```bash
+     ingest clean
+     ingest clean --days 14
+     ingest --clean
+     ```
+
+5. **Automated Scheduling (macOS launchd & Linux Cron)**:
    - Install or view automated daily schedule:
      ```bash
      ingest --schedule-install --time 00:00
@@ -51,7 +59,7 @@ description: >-
      ingest --schedule-remove
      ```
 
-5. **Global Skill Installer**:
+6. **Global Skill Installer**:
    - Install or update this AI skill into the user's global agent directory:
      ```bash
      ingest --install-skill
@@ -73,6 +81,7 @@ description: >-
     }
   ],
   "output_root": "~/reports",
+  "retention_days": 30, // Report retention period in days (0 = keep forever)
   "error_log": "error.log",
   "default_provider": "antigravity",
   "provider": {
@@ -96,7 +105,8 @@ description: >-
   "branches": ["main", "feature/v2"],
   "custom_prompt": "Focus on API breaking changes and database migrations.",
   "diff_mode": true,
-  "max_diff_lines": 300
+  "max_diff_lines": 300,
+  "retention_days": 30
 }
 ```
 

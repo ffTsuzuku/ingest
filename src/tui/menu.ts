@@ -347,6 +347,13 @@ export class InteractiveTUI {
       const saved = await ReportStorage.saveReport(ctx.config.outputRoot, reportMeta, reportMarkdown);
       console.log(`  ${ANSI.green}✔ Report saved to:${ANSI.reset} ${saved.filePath}`);
 
+      if (ctx.config.retentionDays > 0) {
+        const deleted = await ReportStorage.cleanExpiredReports(ctx.config.outputRoot, ctx.config.retentionDays);
+        if (deleted.length > 0) {
+          console.log(`  ${ANSI.dim}Auto-cleaned ${deleted.length} expired report(s) (> ${ctx.config.retentionDays} days old).${ANSI.reset}`);
+        }
+      }
+
       const ansiLines = renderMarkdownToAnsi(reportMarkdown);
       await showTerminalPager(ansiLines, `${repoName} - ${dateStr}`);
     }
@@ -461,6 +468,7 @@ export class InteractiveTUI {
 
       console.log(`  Current Config File: ${ANSI.cyan}${ctx.config.configPath}${ANSI.reset}`);
       console.log(`  Output Root Directory: ${ANSI.cyan}${ctx.config.outputRoot}${ANSI.reset}`);
+      console.log(`  Report Expiration: ${ANSI.cyan}${ctx.config.retentionDays > 0 ? `${ctx.config.retentionDays} days` : "Disabled (keep forever)"}${ANSI.reset}`);
       console.log(`  Default AI Provider: ${ANSI.cyan}${ctx.config.defaultProvider}${ANSI.reset}\n`);
 
       const choices = [];
@@ -468,6 +476,8 @@ export class InteractiveTUI {
         choices.push({ label: " Add Current Directory to Monitored Repos", value: "add_cwd" });
       }
       choices.push(
+        { label: ` Configure Report Retention Period (${ctx.config.retentionDays > 0 ? `${ctx.config.retentionDays}d` : "Disabled"})`, value: "edit_retention" },
+        { label: " Prune / Clean Expired Reports Now", value: "clean_expired" },
         { label: " Edit Default AI Prompt Template", value: "edit_prompt" },
         { label: " Switch Default AI Provider (Antigravity / Opencode / Gemini CLI)", value: "switch_provider" },
         { label: " Back", value: "back" },
@@ -498,6 +508,28 @@ export class InteractiveTUI {
           });
           await ConfigManager.save(ctx.config);
           Logger.success(`Added ${ctx.currentRepoPath} to monitored repositories.`);
+        }
+      } else if (action === "edit_retention") {
+        const newDaysStr = await promptText({
+          message: "Enter report retention period in days (0 = keep forever):",
+          defaultValue: ctx.config.retentionDays.toString(),
+        });
+        if (newDaysStr !== null) {
+          const parsedDays = parseInt(newDaysStr.trim(), 10);
+          if (!isNaN(parsedDays) && parsedDays >= 0) {
+            ctx.config.retentionDays = parsedDays;
+            await ConfigManager.save(ctx.config);
+            Logger.success(`Report retention period updated to ${parsedDays === 0 ? "forever (disabled)" : `${parsedDays} days`}.`);
+          } else {
+            Logger.warn("Invalid retention days value. Please provide a non-negative integer.");
+          }
+        }
+      } else if (action === "clean_expired") {
+        const deleted = await ReportStorage.cleanExpiredReports(ctx.config.outputRoot, ctx.config.retentionDays);
+        if (deleted.length === 0) {
+          Logger.info(`No expired reports found in ${ctx.config.outputRoot} (> ${ctx.config.retentionDays} days old).`);
+        } else {
+          Logger.success(`Cleaned up ${deleted.length} expired report(s).`);
         }
       } else if (action === "edit_prompt") {
         const newPrompt = await promptText({
