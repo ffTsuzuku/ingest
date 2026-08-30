@@ -79,7 +79,7 @@ export class ConfigInitWizard {
       });
 
       if (!modeChoice) {
-        console.log(`\n${ANSI.dim}Setup cancelled.${ANSI.reset}\n`);
+        console.log(`${ANSI.dim}Setup cancelled.${ANSI.reset}\n`);
         return null;
       }
       isQuick = modeChoice === "quick";
@@ -139,12 +139,13 @@ export class ConfigInitWizard {
       const targetFilePath = join(cwd, ".ingestrc");
 
       if (existsSync(targetFilePath)) {
+        console.log(`  ${ANSI.yellow}Existing file found at ${targetFilePath}${ANSI.reset}\n`);
         const overwrite = await promptConfirm({
           message: `.ingestrc already exists in ${cwd}. Overwrite?`,
           defaultYes: true,
         });
         if (!overwrite) {
-          console.log(`\n${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
+          console.log(`  ${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
           return targetFilePath;
         }
       }
@@ -178,12 +179,13 @@ export class ConfigInitWizard {
     const resolvedPath = resolveConfiguredPath(globalPath);
 
     if (existsSync(resolvedPath)) {
+      console.log(`  ${ANSI.yellow}Existing global config found at ${resolvedPath}${ANSI.reset}\n`);
       const overwrite = await promptConfirm({
         message: `Global config already exists at ${resolvedPath}. Overwrite?`,
         defaultYes: false,
       });
       if (!overwrite) {
-        console.log(`\n${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
+        console.log(`  ${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
         return resolvedPath;
       }
     }
@@ -232,10 +234,10 @@ export class ConfigInitWizard {
   "prompt": "${DEFAULT_PROMPT}"
 }
 `;
-      await writeFile(resolvedPath, content, "utf8");
-      this.printSuccessCard(resolvedPath, "Global configuration created at ~/.config/ingest/config.jsonc.");
-      return resolvedPath;
-    }
+    await writeFile(resolvedPath, content, "utf8");
+    this.printSuccessCard(resolvedPath, "Global configuration created at ~/.config/ingest/config.jsonc.");
+    return resolvedPath;
+  }
 
   private static async runGuidedInit(cwd: string, isLocal: boolean, isInsideGit: boolean): Promise<string | null> {
     console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 1: AI Provider Selection (default_provider) ──${ANSI.reset}`);
@@ -276,7 +278,7 @@ export class ConfigInitWizard {
     let opencodeEndpoint = "http://localhost:1234/v1/chat/completions";
 
     if (providerChoice === "opencode") {
-      console.log(`\n  ${ANSI.dim}Model name for completions (e.g. qwen-max, gpt-4o, deepseek-chat, llama3.3).${ANSI.reset}`);
+      console.log(`  ${ANSI.dim}Model name for completions (e.g. qwen-max, gpt-4o, deepseek-chat, llama3.3).${ANSI.reset}`);
       const modelInput = await promptText({
         message: "Opencode model name:",
         defaultValue: "qwen-max",
@@ -298,9 +300,9 @@ export class ConfigInitWizard {
       `  ${ANSI.dim}Configure how Git commit activity and code changes are extracted for analysis.${ANSI.reset}\n`,
     );
     console.log(`  ${ANSI.bold}Settings Explanation:${ANSI.reset}`);
-    console.log(`  ${ANSI.yellow}• Target Branches (branches):${ANSI.reset}   Commits across selected branches will be aggregated & analyzed.`);
-    console.log(`  ${ANSI.green}• Diff Deep-Dive (diff_mode):${ANSI.reset}    When true, inspects file stats (+/- lines) and patch excerpts`);
-    console.log(`                                  instead of commit messages alone.`);
+    console.log(`  ${ANSI.yellow}• Target Branches (branches):${ANSI.reset}     Commits across selected branches will be aggregated & analyzed.`);
+    console.log(`  ${ANSI.green}• Diff Deep-Dive (diff_mode):${ANSI.reset}      When true, inspects file stats (+/- lines) and patch excerpts`);
+    console.log(`                                    instead of commit messages alone.`);
     console.log(`  ${ANSI.blue}• Max Diff Lines (max_diff_lines):${ANSI.reset} Caps patch line count per commit to prevent LLM context overflow.\n`);
     console.log(
       `  ${ANSI.dim}Select branches: <space> to toggle, type to filter/search, and <enter> to confirm.${ANSI.reset}\n`,
@@ -434,10 +436,10 @@ export class ConfigInitWizard {
         try {
           if (LaunchdScheduler.isMacOS()) {
             await LaunchdScheduler.install({ frequency: "daily", time: scheduleTime });
-            console.log(`  ${ANSI.green}✔ Installed macOS LaunchAgent for daily run at ${scheduleTime}.${ANSI.reset}`);
+            console.log(`  ${ANSI.green}✔ Installed macOS LaunchAgent for daily run at ${scheduleTime}.${ANSI.reset}\n`);
           } else {
             await CronScheduler.install({ frequency: "daily", time: scheduleTime });
-            console.log(`  ${ANSI.green}✔ Installed crontab job for daily run at ${scheduleTime}.${ANSI.reset}`);
+            console.log(`  ${ANSI.green}✔ Installed crontab job for daily run at ${scheduleTime}.${ANSI.reset}\n`);
           }
           scheduleInstalled = true;
         } catch (err) {
@@ -446,16 +448,19 @@ export class ConfigInitWizard {
       }
     }
 
-    // Write the configuration
+    // Step 6: Write configuration
+    console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 6: Save Configuration ──${ANSI.reset}\n`);
+
     if (isLocal) {
       const targetFilePath = join(cwd, ".ingestrc");
       if (existsSync(targetFilePath)) {
+        console.log(`  ${ANSI.yellow}Note: .ingestrc already exists in ${cwd}.${ANSI.reset}\n`);
         const overwrite = await promptConfirm({
-          message: `.ingestrc already exists in ${cwd}. Overwrite?`,
+          message: "Overwrite existing .ingestrc file?",
           defaultYes: true,
         });
         if (!overwrite) {
-          console.log(`\n${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
+          console.log(`  ${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
           return targetFilePath;
         }
       }
@@ -505,12 +510,13 @@ ${JSON.stringify(configObj, null, 2)}
     await mkdir(dirname(targetFilePath), { recursive: true });
 
     if (existsSync(targetFilePath)) {
+      console.log(`  ${ANSI.yellow}Note: Global config already exists at ${targetFilePath}.${ANSI.reset}\n`);
       const overwrite = await promptConfirm({
-        message: `Global config already exists at ${targetFilePath}. Overwrite?`,
+        message: "Overwrite existing global configuration?",
         defaultYes: false,
       });
       if (!overwrite) {
-        console.log(`\n${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
+        console.log(`  ${ANSI.yellow}Existing configuration preserved.${ANSI.reset}\n`);
         return targetFilePath;
       }
     }

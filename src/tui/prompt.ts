@@ -157,7 +157,7 @@ export async function promptSelect<T = string>(options: {
         const termWidth = Math.max(20, process.stdout.columns || 80);
         const selected = choices[selectedIndex]!;
         const summary = `${ANSI.bold}${ANSI.green}✔${ANSI.reset} ${message} ${ANSI.cyan}${selected.label}${ANSI.reset}`;
-        process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n");
+        process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n\n");
         resolvePromise(selected.value);
         return;
       }
@@ -173,7 +173,7 @@ export async function promptSelect<T = string>(options: {
         cleanup();
         const termWidth = Math.max(20, process.stdout.columns || 80);
         const backSummary = `${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${message} (Back)${ANSI.reset}`;
-        process.stdout.write(ANSI.clearLine + truncate(backSummary, termWidth - 1) + "\n");
+        process.stdout.write(ANSI.clearLine + truncate(backSummary, termWidth - 1) + "\n\n");
         resolvePromise(null);
         return;
       }
@@ -229,7 +229,7 @@ export async function promptText(options: PromptTextOptions): Promise<string | n
       // Standalone Escape key
       if (chunk.length === 1 && chunk[0] === 0x1b) {
         cleanup();
-        process.stdout.write(`\r${ANSI.clearLine}${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${options.message} (Back)${ANSI.reset}\n`);
+        process.stdout.write(`\r${ANSI.clearLine}${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${options.message} (Back)${ANSI.reset}\n\n`);
         resolvePromise(null);
       }
     };
@@ -244,6 +244,7 @@ export async function promptText(options: PromptTextOptions): Promise<string | n
     rl.question(promptMsg, (answer) => {
       cleanup();
       const val = answer.trim() || options.defaultValue || "";
+      process.stdout.write("\n");
       resolvePromise(val);
     });
   });
@@ -454,7 +455,7 @@ export async function promptMultiSelect<T = string>(options: PromptMultiSelectOp
 
         const termWidth = Math.max(20, process.stdout.columns || 80);
         const summary = `${ANSI.bold}${ANSI.green}✔${ANSI.reset} ${message} ${ANSI.cyan}[${finalValues.join(", ")}]${ANSI.reset}`;
-        process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n");
+        process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n\n");
         resolvePromise(finalValues);
         return;
       }
@@ -470,7 +471,7 @@ export async function promptMultiSelect<T = string>(options: PromptMultiSelectOp
         cleanup();
         const termWidth = Math.max(20, process.stdout.columns || 80);
         const backSummary = `${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${message} (Cancelled)${ANSI.reset}`;
-        process.stdout.write(ANSI.clearLine + truncate(backSummary, termWidth - 1) + "\n");
+        process.stdout.write(ANSI.clearLine + truncate(backSummary, termWidth - 1) + "\n\n");
         resolvePromise(null);
         return;
       }
