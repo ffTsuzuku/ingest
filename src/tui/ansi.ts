@@ -236,22 +236,47 @@ export function wrapAnsiLine(line: string, maxWidth: number, hangingIndent = "")
 }
 
 export function truncate(text: string, maxWidth: number): string {
-  const plain = stripAnsi(text);
-  if (plain.length <= maxWidth) return text;
-  return plain.slice(0, maxWidth - 1) + "…";
+  if (maxWidth <= 0) return "";
+  const totalVisible = visibleLength(text);
+  if (totalVisible <= maxWidth) return text;
+
+  const targetWidth = Math.max(1, maxWidth - 1);
+  // Match ANSI escape codes (OSC, CSI, simple) or single characters
+  const tokenRegex = /(?:\x1b\](?:[^\x07\x1b]|\x1b[^\\])*?(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[a-zA-Z]|\x1b[@-Z\\-_]|[^\x1b])/g;
+  const tokens = text.match(tokenRegex) || [];
+
+  let result = "";
+  let currentVisible = 0;
+
+  for (const token of tokens) {
+    if (token.startsWith("\x1b")) {
+      result += token;
+    } else {
+      if (currentVisible + 1 > targetWidth) {
+        break;
+      }
+      result += token;
+      currentVisible += 1;
+    }
+  }
+
+  return result + ANSI.reset + "…";
 }
 
 export function drawBox(title: string, contentLines: string[], width = 70): string[] {
-  const horizontal = "─".repeat(width - 2);
+  const safeWidth = Math.max(10, width);
+  const horizontal = "─".repeat(Math.max(0, safeWidth - 2));
   const titleFormatted = title ? ` ${ANSI.bold}${title}${ANSI.reset} ` : "";
   const titleLen = visibleLength(titleFormatted);
-  const topBar = `┌${titleFormatted}${"─".repeat(Math.max(0, width - 2 - titleLen))}┐`;
+  const topBar = `┌${titleFormatted}${"─".repeat(Math.max(0, safeWidth - 2 - titleLen))}┐`;
   const bottomBar = `└${horizontal}┘`;
 
+  const maxInner = Math.max(0, safeWidth - 4);
   const renderedLines = contentLines.map((line) => {
-    const plain = visibleLength(line);
-    const padding = Math.max(0, width - 4 - plain);
-    return `│ ${line}${" ".repeat(padding)} │`;
+    const truncatedLine = truncate(line, maxInner);
+    const plain = visibleLength(truncatedLine);
+    const padding = Math.max(0, maxInner - plain);
+    return `│ ${truncatedLine}${" ".repeat(padding)} │`;
   });
 
   return [topBar, ...renderedLines, bottomBar];

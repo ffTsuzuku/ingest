@@ -1,5 +1,5 @@
 import * as readline from "node:readline";
-import { ANSI } from "./ansi.js";
+import { ANSI, truncate } from "./ansi.js";
 
 export interface SelectOption<T = string> {
   label: string;
@@ -28,13 +28,15 @@ export async function promptSelect<T = string>(options: {
     let isRendered = false;
 
     const render = () => {
+      const termWidth = Math.max(20, process.stdout.columns || 80);
       if (isRendered) {
-        // Move up choices.length + 1 lines
-        process.stdout.write(`\x1b[${choices.length + 1}A`);
+        // Move up choices.length + 1 lines and reset cursor to start of line
+        process.stdout.write(`\r\x1b[${choices.length + 1}A`);
       }
       isRendered = true;
 
-      process.stdout.write(ANSI.clearLine + `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${message}${ANSI.reset}\n`);
+      const titleLine = `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${message}${ANSI.reset}`;
+      process.stdout.write(ANSI.clearLine + truncate(titleLine, termWidth - 1) + "\n");
 
       choices.forEach((choice, index) => {
         const isSelected = index === selectedIndex;
@@ -44,7 +46,8 @@ export async function promptSelect<T = string>(options: {
           : `${ANSI.white}${choice.label}${ANSI.reset}`;
         const hint = choice.hint ? ` ${ANSI.gray}(${choice.hint})${ANSI.reset}` : "";
 
-        process.stdout.write(ANSI.clearLine + `  ${pointer} ${label}${hint}\n`);
+        const line = `  ${pointer} ${label}${hint}`;
+        process.stdout.write(ANSI.clearLine + truncate(line, termWidth - 1) + "\n");
       });
     };
 
@@ -61,8 +64,10 @@ export async function promptSelect<T = string>(options: {
       // Enter key
       if (key === "\r" || key === "\n") {
         cleanup();
+        const termWidth = Math.max(20, process.stdout.columns || 80);
         const selected = choices[selectedIndex]!;
-        process.stdout.write(ANSI.clearLine + `${ANSI.bold}${ANSI.green}✔${ANSI.reset} ${message} ${ANSI.cyan}${selected.label}${ANSI.reset}\n`);
+        const summary = `${ANSI.bold}${ANSI.green}✔${ANSI.reset} ${message} ${ANSI.cyan}${selected.label}${ANSI.reset}`;
+        process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n");
         resolvePromise(selected.value);
         return;
       }
@@ -76,7 +81,9 @@ export async function promptSelect<T = string>(options: {
       // Standalone Escape key (Esc: \x1b, length 1)
       if (key === "\u001b" || (chunk.length === 1 && chunk[0] === 0x1b)) {
         cleanup();
-        process.stdout.write(ANSI.clearLine + `${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${message} (Back)${ANSI.reset}\n`);
+        const termWidth = Math.max(20, process.stdout.columns || 80);
+        const backSummary = `${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${message} (Back)${ANSI.reset}`;
+        process.stdout.write(ANSI.clearLine + truncate(backSummary, termWidth - 1) + "\n");
         resolvePromise(null);
         return;
       }

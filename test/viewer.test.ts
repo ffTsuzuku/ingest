@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { renderMarkdownToAnsi, formatInlineMarkdown } from "../src/report/viewer.js";
-import { stripAnsi, visibleLength, wrapAnsiLine } from "../src/tui/ansi.js";
+import { stripAnsi, visibleLength, wrapAnsiLine, truncate } from "../src/tui/ansi.js";
 
 describe("Markdown Terminal Renderer", () => {
   it("should format headers and bullet lists with ANSI codes", () => {
@@ -66,6 +66,19 @@ describe("Markdown Terminal Renderer", () => {
     assert.ok(plainText.includes("+const a = 1;"));
     assert.ok(plainText.includes("-const a = 0;"));
     assert.ok(plainText.includes("@@ -1,2 +1,2 @@"));
+  });
+
+  it("should truncate plain and ANSI styled lines safely without breaking styles", () => {
+    const plain = "A very long line that should be truncated";
+    const truncatedPlain = truncate(plain, 15);
+    assert.equal(visibleLength(truncatedPlain), 15);
+    assert.ok(truncatedPlain.endsWith("…"));
+
+    const styled = "\x1b[1m\x1b[36mStyled Header That Is Quite Long\x1b[0m";
+    const truncatedStyled = truncate(styled, 20);
+    assert.equal(visibleLength(truncatedStyled), 20);
+    assert.ok(truncatedStyled.includes("\x1b[1m"));
+    assert.ok(truncatedStyled.endsWith("…"));
   });
 });
 

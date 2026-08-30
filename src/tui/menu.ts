@@ -122,7 +122,8 @@ export class InteractiveTUI {
       `${ANSI.bold}${ANSI.brightCyan}INGEST${ANSI.reset} ${ANSI.gray}- AI Daily Report Generator & Git Intelligence${ANSI.reset}`,
       `${ANSI.dim}Zero-Dependency TUI | Deep-Dive Diffs | Auto-Scheduler | Global AI Skill${ANSI.reset}`,
     ];
-    console.log(drawBox(" ingest", bannerLines, 74).join("\n"));
+    const boxWidth = Math.max(40, Math.min(76, (process.stdout.columns || 80) - 2));
+    console.log(drawBox(" ingest", bannerLines, boxWidth).join("\n"));
     console.log("");
   }
 
