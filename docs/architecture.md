@@ -1,0 +1,70 @@
+# Git-Ingest Architecture Specification
+
+This document describes the architectural layers, module responsibilities, and data flows of `git-ingest`.
+
+## 1. System Overview
+
+`git-ingest` is an AI-first developer tool that inspects Git repository histories, performs multi-commit AI analysis, generates structured markdown reports, and offers an interactive zero-dependency terminal UI and automated scheduling suite.
+
+```mermaid
+graph TD
+    CLI[CLI Entrypoint: src/index.ts] --> Router{Interactive or Headless?}
+    Router -->|No Args / TUI Flag| TUI[TUI Menu System: src/tui/menu.ts]
+    Router -->|Args / Cron / Flags| Runner[Headless Pipeline: src/index.ts]
+    
+    TUI --> ConfigMgr[Config Manager: src/config/manager.ts]
+    Runner --> ConfigMgr
+    
+    TUI --> GitEng[Git Engine: src/git/log.ts & diff.ts]
+    Runner --> GitEng
+    
+    TUI --> AIEng[AI Engine: src/ai/factory.ts]
+    Runner --> AIEng
+    
+    TUI --> Viewer[Terminal Markdown Viewer: src/report/viewer.ts]
+    TUI --> Scheduler[Scheduler Wizard: src/scheduler/]
+    TUI --> SkillInst[Skill Installer: src/skill/installer.ts]
+    
+    AIEng --> RepGen[Report Generator: src/report/generator.ts]
+    RepGen --> RepStore[Report Storage: src/report/storage.ts]
+```
+
+---
+
+## 2. Module Responsibilities
+
+### 2.1. `src/config/`
+- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `ProviderConfig`, and `RawConfig`.
+- **`parser.ts`**: Pure zero-dependency JSONC parser supporting single-line `//`, block `/* ... */` comments, and trailing commas.
+- **`manager.ts`**: Loads configs from custom paths or `~/.config/git-ingest/config.jsonc`, initializes defaults if missing, validates fields, and supports persistent updates.
+
+### 2.2. `src/git/`
+- **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, and lists local/remote branches.
+- **`log.ts`**: Queries Git commit history across specified branches within flexible time windows (`--since`, `--until`), extracting author names, emails, hashes, commit subjects, and file change lists.
+- **`diff.ts`**: Analyzes repository file stats (`git diff --stat`) and patch excerpts for deep-dive AI context.
+
+### 2.3. `src/ai/`
+- **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, and `AnalysisResult`.
+- **`prompt.ts`**: Generates high-fidelity structured prompts. Merges default system instructions with per-repo prompt overrides and diff analytics.
+- **`opencode.ts`**: Provider adapter for Opencode CLI / local OpenAI-compatible endpoints.
+- **`gemini-cli.ts`**: Provider adapter for Gemini CLI (`gemini`) and direct API key integrations.
+- **`factory.ts`**: Instantiates and selects the appropriate provider based on active configuration.
+
+### 2.4. `src/report/`
+- **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown.
+- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, and scans past reports.
+- **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting and a keyboard-navigable scroll pager.
+
+### 2.5. `src/scheduler/`
+- **`types.ts`**: Types for job configurations, frequency (daily, hourly, weekly, custom cron), and status.
+- **`cron.ts`**: Manages user crontab entries with managed block markers (`# BEGIN git-ingest` / `# END git-ingest`).
+- **`launchd.ts`**: Generates and manages macOS LaunchAgents (`~/Library/LaunchAgents/com.tsuzuku.git-ingest.plist`).
+
+### 2.6. `src/skill/`
+- **`installer.ts`**: Discovers and deploys the `git-ingest` AI skill into `~/.gemini/config/skills/git-ingest/` (or workspace `.agents/skills/`) so AI coding assistants can immediately assist users.
+
+### 2.7. `src/tui/`
+- **`ansi.ts`**: ANSI color codes, text formatting, line drawing, and cursor manipulation.
+- **`prompt.ts`**: Zero-dependency interactive prompts: single select (arrow keys), multi-select, text input, date picker, and confirmation modals.
+- **`pager.ts`**: Scrollable terminal pager supporting `Up`/`Down`, `PageUp`/`PageDown`, `Home`/`End`, and `q`.
+- **`menu.ts`**: Interactive TUI orchestration loop providing navigation between report generation, report viewing, scheduling, settings, and skill installation.
