@@ -1,11 +1,21 @@
 import type { AIProvider } from "./types.js";
 import type { AppConfig } from "../config/types.js";
+import { AntigravityProvider } from "./antigravity.js";
 import { OpencodeProvider } from "./opencode.js";
-import { GeminiCliProvider } from "./gemini-cli.js";
 
 export class AIFactory {
   public static getProvider(config: AppConfig, overrideProviderName?: string): AIProvider {
     const targetProvider = overrideProviderName || config.defaultProvider;
+
+    if (
+      targetProvider === "antigravity" ||
+      targetProvider === "agy" ||
+      targetProvider === "gemini-cli" ||
+      (!overrideProviderName && (config.providers.antigravity || config.providers.agy || config.providers["gemini-cli"]))
+    ) {
+      const agyConfig = config.providers.antigravity || config.providers.agy || config.providers["gemini-cli"] || {};
+      return new AntigravityProvider(agyConfig);
+    }
 
     if (targetProvider === "opencode" || (!overrideProviderName && config.providers.opencode)) {
       if (config.providers.opencode) {
@@ -13,22 +23,16 @@ export class AIFactory {
       }
     }
 
-    if (targetProvider === "gemini-cli" || (!overrideProviderName && config.providers["gemini-cli"])) {
-      if (config.providers["gemini-cli"]) {
-        return new GeminiCliProvider(config.providers["gemini-cli"]);
-      }
+    // Fallbacks
+    if (config.providers.antigravity || config.providers.agy || config.providers["gemini-cli"]) {
+      const agyConfig = config.providers.antigravity || config.providers.agy || config.providers["gemini-cli"] || {};
+      return new AntigravityProvider(agyConfig);
     }
-
-    // Fallback order
     if (config.providers.opencode) {
       return new OpencodeProvider(config.providers.opencode);
     }
-    if (config.providers["gemini-cli"]) {
-      return new GeminiCliProvider(config.providers["gemini-cli"]);
-    }
 
-    throw new Error(
-      "No valid AI provider configured. Please configure 'opencode' or 'gemini-cli' in your config file.",
-    );
+    // Default to AntigravityProvider if nothing is explicitly configured
+    return new AntigravityProvider({});
   }
 }

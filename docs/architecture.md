@@ -46,8 +46,9 @@ graph TD
 ### 2.3. `src/ai/`
 - **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, and `AnalysisResult`.
 - **`prompt.ts`**: Generates high-fidelity structured prompts. Merges default system instructions with per-repo prompt overrides and diff analytics.
+- **`antigravity.ts`**: Primary provider adapter for Antigravity CLI (`agy --print --dangerously-skip-permissions`).
 - **`opencode.ts`**: Provider adapter for Opencode CLI / local OpenAI-compatible endpoints.
-- **`gemini-cli.ts`**: Provider adapter for Gemini CLI (`gemini`) and direct API key integrations.
+- **`gemini-cli.ts`**: Provider adapter alias for backward compatibility.
 - **`factory.ts`**: Instantiates and selects the appropriate provider based on active configuration.
 
 ### 2.4. `src/report/`

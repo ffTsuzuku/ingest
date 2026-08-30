@@ -72,7 +72,7 @@ export class InteractiveTUI {
         {
           label: "🩺 Test AI Provider Connection",
           value: "test-ai",
-          hint: "Verify Opencode / Gemini CLI integration",
+          hint: "Verify Antigravity (agy) / Opencode CLI integration",
         },
         {
           label: "🚪 Exit",
@@ -432,11 +432,11 @@ export class InteractiveTUI {
       await ConfigManager.save(ctx.config);
       Logger.success("Default prompt updated.");
     } else if (action === "switch_provider") {
-      const newProvider = await promptSelect<"opencode" | "gemini-cli">({
+      const newProvider = await promptSelect<"antigravity" | "opencode" | "gemini-cli">({
         message: "Select default AI provider:",
         choices: [
+          { label: "Antigravity CLI (agy)", value: "antigravity" },
           { label: "Opencode CLI (Local/OpenAI)", value: "opencode" },
-          { label: "Gemini CLI", value: "gemini-cli" },
         ],
       });
       ctx.config.defaultProvider = newProvider;

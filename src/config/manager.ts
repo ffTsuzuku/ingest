@@ -45,16 +45,15 @@ export class ConfigManager {
   ],
   "output_root": "~/reports",
   "error_log": "error.log",
-  "default_provider": "opencode",
+  "default_provider": "antigravity",
   "provider": {
+    "antigravity": {
+      "dangerously_skip_permissions": true
+    },
     "opencode": {
       "model": "qwen-max",
       "endpoint": "http://localhost:1234/v1/chat/completions",
       "api_key_env": null
-    },
-    "gemini-cli": {
-      "model": "gemini-1.5-flash",
-      "gemini_api_key_file": "~/.config/gemini-api-key.json"
     }
   },
   "prompt": "Summarize repo activity from last 24h: commit messages, authors, key patterns, overall narrative."
@@ -116,7 +115,7 @@ export class ConfigManager {
     const rawErrorLog = rawConfig.error_log || DEFAULT_ERROR_LOG;
     const errorLogPath = resolveConfiguredPath(rawErrorLog, configDir);
     const providers = rawConfig.provider || rawConfig.agents || {};
-    const defaultProvider = rawConfig.default_provider || "opencode";
+    const defaultProvider = rawConfig.default_provider || "antigravity";
     const prompt = typeof rawConfig.prompt === "string" && rawConfig.prompt.trim() !== "" ? rawConfig.prompt : DEFAULT_PROMPT;
 
     Logger.configure({ logFilePath: errorLogPath });

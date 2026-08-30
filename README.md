@@ -70,16 +70,15 @@ git-ingest --schedule-remove
   ],
   "output_root": "~/reports",
   "error_log": "error.log",
-  "default_provider": "opencode",
+  "default_provider": "antigravity",
   "provider": {
+    "antigravity": {
+      "dangerously_skip_permissions": true
+    },
     "opencode": {
       "model": "qwen-max",
       "endpoint": "http://localhost:1234/v1/chat/completions",
       "api_key_env": null
-    },
-    "gemini-cli": {
-      "model": "gemini-1.5-flash",
-      "gemini_api_key_file": "~/.config/gemini-api-key.json"
     }
   },
   "prompt": "Summarize repo activity from last 24h: commit messages, authors, key patterns, overall narrative."

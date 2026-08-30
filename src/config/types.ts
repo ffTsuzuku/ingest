@@ -17,14 +17,17 @@ export interface OpencodeProviderConfig {
   api_key_env?: Nullable<string>;
 }
 
-export interface GeminiCliProviderConfig {
-  model: string;
-  gemini_api_key_file?: string;
+export interface AntigravityProviderConfig {
+  model?: string;
+  dangerously_skip_permissions?: boolean;
+  effort?: "low" | "medium" | "high";
 }
 
 export interface ProviderConfigMap {
+  antigravity?: AntigravityProviderConfig;
+  agy?: AntigravityProviderConfig;
   opencode?: OpencodeProviderConfig;
-  "gemini-cli"?: GeminiCliProviderConfig;
+  "gemini-cli"?: AntigravityProviderConfig;
 }
 
 export interface RawConfig {
@@ -33,7 +36,7 @@ export interface RawConfig {
   error_log?: string;
   provider?: ProviderConfigMap;
   agents?: ProviderConfigMap;
-  default_provider?: "opencode" | "gemini-cli";
+  default_provider?: "antigravity" | "opencode" | "gemini-cli" | "agy";
   prompt?: string;
   date_format?: string;
 }
@@ -44,7 +47,7 @@ export interface AppConfig {
   rawOutputRoot: string;
   errorLogPath: string;
   providers: ProviderConfigMap;
-  defaultProvider: "opencode" | "gemini-cli";
+  defaultProvider: "antigravity" | "opencode" | "gemini-cli" | "agy";
   prompt: string;
   configPath: string;
 }

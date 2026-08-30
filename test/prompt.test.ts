@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildAnalysisPrompt, resolveRepoPrompt } from "../src/ai/prompt.js";
+import { AIFactory } from "../src/ai/factory.js";
+import type { AppConfig } from "../src/config/types.js";
 
 describe("AI Prompt Builder", () => {
   it("should format prompt with commit information and diff statistics", () => {
@@ -41,5 +43,26 @@ describe("AI Prompt Builder", () => {
   it("should prioritize customPrompt over basePrompt", async () => {
     const prompt = await resolveRepoPrompt("Base prompt", "Custom repo prompt override");
     assert.equal(prompt, "Custom repo prompt override");
+  });
+});
+
+describe("AI Factory", () => {
+  it("should return AntigravityProvider for antigravity and agy", () => {
+    const config: AppConfig = {
+      repos: [],
+      outputRoot: "/tmp/reports",
+      rawOutputRoot: "/tmp/reports",
+      errorLogPath: "/tmp/error.log",
+      defaultProvider: "antigravity",
+      providers: {
+        antigravity: { dangerously_skip_permissions: true },
+      },
+      prompt: "test",
+      configPath: "/tmp/config.jsonc",
+    };
+
+    const provider = AIFactory.getProvider(config);
+    assert.equal(provider.id, "antigravity");
+    assert.ok(provider.name.includes("Antigravity"));
   });
 });
