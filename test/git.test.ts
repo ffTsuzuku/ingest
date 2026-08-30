@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildGitDateArgs } from "../src/git/log.js";
+import { buildGitDateArgs, resolveDateFilter } from "../src/git/log.js";
 import { isGitRepo, getGitBranches, getRepoName, extractRepoNameFromUrl } from "../src/git/runner.js";
 import { fetchDiffStat, fetchDiffPatches } from "../src/git/diff.js";
 
@@ -13,6 +13,42 @@ describe("Git Log Helpers", () => {
   it("should format custom since and until date filters", () => {
     const args = buildGitDateArgs({ since: "2026-04-01 00:00:00", until: "2026-04-01 23:59:59" });
     assert.deepEqual(args, ["--since=2026-04-01 00:00:00", "--until=2026-04-01 23:59:59"]);
+  });
+
+  it("should resolve single date filter", () => {
+    const resolved = resolveDateFilter({ dateStr: "2026-08-15" });
+    assert.equal(resolved.reportDateStr, "2026-08-15");
+    assert.deepEqual(resolved.dateFilter, {
+      since: "2026-08-15 00:00:00",
+      until: "2026-08-15 23:59:59",
+    });
+  });
+
+  it("should resolve date range filter with double dots", () => {
+    const resolved = resolveDateFilter({ dateStr: "2026-08-01..2026-08-07" });
+    assert.equal(resolved.reportDateStr, "2026-08-01-to-2026-08-07");
+    assert.deepEqual(resolved.dateFilter, {
+      since: "2026-08-01 00:00:00",
+      until: "2026-08-07 23:59:59",
+    });
+  });
+
+  it("should resolve date range filter with 'to' separator and auto-sort inverted dates", () => {
+    const resolved = resolveDateFilter({ dateStr: "2026-08-07 to 2026-08-01" });
+    assert.equal(resolved.reportDateStr, "2026-08-01-to-2026-08-07");
+    assert.deepEqual(resolved.dateFilter, {
+      since: "2026-08-01 00:00:00",
+      until: "2026-08-07 23:59:59",
+    });
+  });
+
+  it("should resolve explicit sinceStr and untilStr", () => {
+    const resolved = resolveDateFilter({ sinceStr: "2026-08-01", untilStr: "2026-08-10" });
+    assert.equal(resolved.reportDateStr, "2026-08-01-to-2026-08-10");
+    assert.deepEqual(resolved.dateFilter, {
+      since: "2026-08-01 00:00:00",
+      until: "2026-08-10 23:59:59",
+    });
   });
 });
 

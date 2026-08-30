@@ -43,8 +43,8 @@ export class ReportStorage {
             if (file.isFile() && file.name.endsWith(".md")) {
               const fullPath = join(repoDir, file.name);
               const fileStats = await stat(fullPath);
-              const dateMatch = file.name.match(/^(\d{4}-\d{2}-\d{2})/);
-              const dateStr = dateMatch ? (dateMatch[1] ?? file.name) : file.name;
+              const dateMatch = file.name.match(/^(\d{4}-\d{2}-\d{2}(?:-to-\d{4}-\d{2}-\d{2})?)/);
+              const dateStr = dateMatch ? (dateMatch[1] ?? file.name) : file.name.replace(/-summary\.md$/, "");
 
               reports.push({
                 filePath: fullPath,

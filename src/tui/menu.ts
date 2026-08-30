@@ -5,7 +5,7 @@ import { showTerminalPager } from "./pager.js";
 import { ConfigManager } from "../config/manager.js";
 import type { AppConfig, RepoConfig } from "../config/types.js";
 import { isGitRepo, getCurrentBranch, resolveRepoPath, getGitBranches, getRepoName } from "../git/runner.js";
-import { fetchRepoCommits } from "../git/log.js";
+import { fetchRepoCommits, resolveDateFilter } from "../git/log.js";
 import { fetchDiffStat } from "../git/diff.js";
 import { AIFactory } from "../ai/factory.js";
 import { resolveRepoPrompt } from "../ai/prompt.js";
@@ -194,7 +194,9 @@ export class InteractiveTUI {
         { label: " Last 24 Hours (Default)", value: "24h" },
         { label: " Today (from 00:00 local time)", value: "today" },
         { label: " Custom Specific Date (YYYY-MM-DD)", value: "custom_date" },
+        { label: " Custom Date Range (YYYY-MM-DD to YYYY-MM-DD)", value: "date_range" },
         { label: " Last 7 Days", value: "7d" },
+        { label: " Last 30 Days", value: "30d" },
         { label: " Back", value: "__back__" },
       ],
     });
@@ -203,24 +205,58 @@ export class InteractiveTUI {
       return;
     }
 
-    let dateStr = new Date().toISOString().slice(0, 10);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let dateStr = todayStr;
     const dateFilter: { since?: string; until?: string; sinceHours?: number } = {};
 
     if (dateChoice === "24h") {
       dateFilter.sinceHours = 24;
+      dateStr = todayStr;
     } else if (dateChoice === "today") {
-      dateFilter.since = `${dateStr} 00:00:00`;
-    } else if (dateChoice === "7d") {
-      dateFilter.since = "7 days ago";
+      dateFilter.since = `${todayStr} 00:00:00`;
+      dateStr = todayStr;
     } else if (dateChoice === "custom_date") {
       const customDateStr = await promptText({
         message: "Enter date (YYYY-MM-DD):",
-        defaultValue: dateStr,
+        defaultValue: todayStr,
       });
       if (!customDateStr) return;
-      dateStr = customDateStr;
-      dateFilter.since = `${dateStr} 00:00:00`;
-      dateFilter.until = `${dateStr} 23:59:59`;
+      const resolved = resolveDateFilter({ dateStr: customDateStr });
+      dateFilter.since = resolved.dateFilter.since;
+      dateFilter.until = resolved.dateFilter.until;
+      dateStr = resolved.reportDateStr;
+    } else if (dateChoice === "date_range") {
+      const defaultStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const startDateInput = await promptText({
+        message: "Enter start date (YYYY-MM-DD):",
+        defaultValue: defaultStart,
+      });
+      if (!startDateInput) return;
+
+      const endDateInput = await promptText({
+        message: "Enter end date (YYYY-MM-DD):",
+        defaultValue: todayStr,
+      });
+      if (!endDateInput) return;
+
+      let start = startDateInput.trim();
+      let end = endDateInput.trim();
+      if (start > end) {
+        [start, end] = [end, start];
+      }
+      dateFilter.since = `${start} 00:00:00`;
+      dateFilter.until = `${end} 23:59:59`;
+      dateStr = `${start}-to-${end}`;
+    } else if (dateChoice === "7d") {
+      const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      dateFilter.since = `${start} 00:00:00`;
+      dateFilter.until = `${todayStr} 23:59:59`;
+      dateStr = `${start}-to-${todayStr}`;
+    } else if (dateChoice === "30d") {
+      const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      dateFilter.since = `${start} 00:00:00`;
+      dateFilter.until = `${todayStr} 23:59:59`;
+      dateStr = `${start}-to-${todayStr}`;
     }
 
     const diffChoice = await promptSelect({

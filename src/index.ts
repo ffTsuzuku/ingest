@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { ConfigManager } from "./config/manager.js";
 import { InteractiveTUI } from "./tui/menu.js";
 import { isGitRepo, resolveRepoPath, getGitBranches, getRepoName } from "./git/runner.js";
-import { fetchRepoCommits } from "./git/log.js";
+import { fetchRepoCommits, resolveDateFilter } from "./git/log.js";
 import { fetchDiffStat } from "./git/diff.js";
 import { AIFactory } from "./ai/factory.js";
 import { resolveRepoPrompt } from "./ai/prompt.js";
@@ -23,6 +23,9 @@ interface ParsedArgs {
   outputRoot?: string;
   repoPath?: string;
   dateStr?: string;
+  sinceStr?: string;
+  untilStr?: string;
+  dateRange?: string;
   sinceHours?: number;
   diffMode?: boolean;
   viewFile?: string;
@@ -53,6 +56,12 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.repoPath = args[++i];
     } else if (arg === "--date" && i + 1 < args.length) {
       result.dateStr = args[++i];
+    } else if (arg === "--since" && i + 1 < args.length) {
+      result.sinceStr = args[++i];
+    } else if (arg === "--until" && i + 1 < args.length) {
+      result.untilStr = args[++i];
+    } else if ((arg === "--range" || arg === "--date-range") && i + 1 < args.length) {
+      result.dateRange = args[++i];
     } else if (arg === "--diff") {
       result.diffMode = true;
     } else if (arg === "--view" && i + 1 < args.length) {
@@ -80,23 +89,29 @@ function printHelp(): void {
 ${ANSI.bold}${ANSI.brightCyan}ingest${ANSI.reset} - AI Daily Report Generator & Git Activity Explorer
 
 ${ANSI.bold}USAGE:${ANSI.reset}
-  ingest                          Launch interactive TUI
-  ingest [config-path]            Run headless generation for all repos in config
-  ingest --repo <path>            Run report for a single repository
-  ingest --date <YYYY-MM-DD>      Generate report for a specific date
-  ingest --diff                   Enable Git diff deep-dive analysis
-  ingest --view <report.md>       View markdown report in terminal pager
-  ingest --install-skill          Deploy AI skill to ~/.gemini/config/skills/ingest/
-  ingest --schedule-install       Install automated daily scheduler (launchd / cron)
-  ingest --schedule-status        Check current scheduler status
-  ingest --schedule-remove        Remove automated schedules
+  ingest                              Launch interactive TUI
+  ingest [config-path]                Run headless generation for all repos in config
+  ingest --repo <path>                Run report for a single repository
+  ingest --date <YYYY-MM-DD>          Generate report for a specific date
+  ingest --date <start>..<end>        Generate report for a date range (e.g. 2026-08-01..2026-08-07)
+  ingest --since <date> --until <date> Generate report for a custom date range
+  ingest --diff                       Enable Git diff deep-dive analysis
+  ingest --view <report.md>           View markdown report in terminal pager
+  ingest --install-skill              Deploy AI skill to ~/.gemini/config/skills/ingest/
+  ingest --schedule-install           Install automated daily scheduler (launchd / cron)
+  ingest --schedule-status            Check current scheduler status
+  ingest --schedule-remove            Remove automated schedules
 
 ${ANSI.bold}OPTIONS:${ANSI.reset}
-  -i, --interactive       Force interactive TUI mode
-  --config <path>         Path to custom config.jsonc
-  --output-root <path>    Override report output directory
-  --time <HH:MM>          Scheduled run time (default: 00:00)
-  -h, --help              Show this help message
+  -i, --interactive           Force interactive TUI mode
+  --config <path>             Path to custom config.jsonc
+  --output-root <path>        Override report output directory
+  --date <date|range>         Specific date (YYYY-MM-DD) or range (YYYY-MM-DD..YYYY-MM-DD)
+  --since <date>              Start date for commit history
+  --until <date>              End date for commit history
+  --range <start..end>        Date range alias
+  --time <HH:MM>              Scheduled run time (default: 00:00)
+  -h, --help                  Show this help message
 `);
 }
 
@@ -106,10 +121,14 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
     config.outputRoot = resolve(parsed.outputRoot);
   }
 
-  const dateStr = parsed.dateStr || new Date().toISOString().slice(0, 10);
-  const dateFilter = parsed.dateStr
-    ? { since: `${parsed.dateStr} 00:00:00`, until: `${parsed.dateStr} 23:59:59` }
-    : { sinceHours: parsed.sinceHours || 24 };
+  const resolvedDate = resolveDateFilter({
+    dateStr: parsed.dateRange || parsed.dateStr,
+    sinceStr: parsed.sinceStr,
+    untilStr: parsed.untilStr,
+    sinceHours: parsed.sinceHours,
+  });
+  const dateStr = resolvedDate.reportDateStr;
+  const dateFilter = resolvedDate.dateFilter;
 
   let targetRepos = config.repos;
   if (parsed.repoPath) {

@@ -24,9 +24,11 @@ description: >-
      ```bash
      ingest
      ```
-   - Generate report for a specific repository on a specific date:
+   - Generate report for a specific repository on a specific date or date range:
      ```bash
      ingest --repo /path/to/repo --date 2026-04-05
+     ingest --repo /path/to/repo --date 2026-04-01..2026-04-07
+     ingest --repo /path/to/repo --since 2026-04-01 --until 2026-04-07
      ```
    - Enable deep-dive code diff analysis:
      ```bash
@@ -85,6 +87,6 @@ description: >-
 
 ## How to Assist Users
 
-- When the user wants a summary of today's work, suggest running `ingest` in the current directory or specifying `--date YYYY-MM-DD`.
+- When the user wants a summary of today's work or a specific time period, suggest running `ingest` in the current directory or specifying `--date YYYY-MM-DD` or `--date YYYY-MM-DD..YYYY-MM-DD`.
 - When the user wants automated nightly reports, guide them through `ingest --schedule-install` or the interactive TUI Scheduler Wizard.
 - When the user wants to customize AI prompts per repo, update the `custom_prompt` or `custom_prompt_file` attribute in `~/.config/ingest/config.jsonc`.

@@ -108,3 +108,107 @@ export async function fetchRepoCommits(
   // Sort by timestamp descending
   return allCommits.sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
 }
+
+export interface DateFilterOptions {
+  dateStr?: string;
+  sinceStr?: string;
+  untilStr?: string;
+  sinceHours?: number;
+}
+
+export interface ResolvedDateRange {
+  dateFilter: DateFilter;
+  reportDateStr: string;
+}
+
+export function resolveDateFilter(opts: DateFilterOptions = {}): ResolvedDateRange {
+  // If sinceStr or untilStr explicitly provided
+  if (opts.sinceStr || opts.untilStr) {
+    const since = opts.sinceStr
+      ? /^\d{4}-\d{2}-\d{2}$/.test(opts.sinceStr)
+        ? `${opts.sinceStr} 00:00:00`
+        : opts.sinceStr
+      : undefined;
+    const until = opts.untilStr
+      ? /^\d{4}-\d{2}-\d{2}$/.test(opts.untilStr)
+        ? `${opts.untilStr} 23:59:59`
+        : opts.untilStr
+      : undefined;
+
+    let reportDateStr: string;
+    if (opts.sinceStr && opts.untilStr) {
+      reportDateStr = `${opts.sinceStr.slice(0, 10)}-to-${opts.untilStr.slice(0, 10)}`;
+    } else if (opts.sinceStr) {
+      reportDateStr = `since-${opts.sinceStr.slice(0, 10)}`;
+    } else {
+      reportDateStr = `until-${opts.untilStr!.slice(0, 10)}`;
+    }
+
+    return {
+      dateFilter: {
+        since,
+        until,
+      },
+      reportDateStr,
+    };
+  }
+
+  // If dateStr provided (could be single date or range)
+  if (opts.dateStr) {
+    const trimmed = opts.dateStr.trim();
+    // Check range patterns: YYYY-MM-DD..YYYY-MM-DD, YYYY-MM-DD...YYYY-MM-DD, YYYY-MM-DD to YYYY-MM-DD, YYYY-MM-DD_to_YYYY-MM-DD, YYYY-MM-DD:YYYY-MM-DD
+    const rangeMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s*(?:\.\.|\.\.\.| to |_to_|:|\s-\s)\s*(\d{4}-\d{2}-\d{2})$/);
+    if (rangeMatch) {
+      let start = rangeMatch[1]!;
+      let end = rangeMatch[2]!;
+      if (start > end) {
+        [start, end] = [end, start];
+      }
+      return {
+        dateFilter: {
+          since: `${start} 00:00:00`,
+          until: `${end} 23:59:59`,
+        },
+        reportDateStr: `${start}-to-${end}`,
+      };
+    }
+
+    // Single YYYY-MM-DD date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return {
+        dateFilter: {
+          since: `${trimmed} 00:00:00`,
+          until: `${trimmed} 23:59:59`,
+        },
+        reportDateStr: trimmed,
+      };
+    }
+
+    // Custom date string
+    return {
+      dateFilter: {
+        since: trimmed,
+      },
+      reportDateStr: trimmed,
+    };
+  }
+
+  if (opts.sinceHours !== undefined) {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      dateFilter: {
+        sinceHours: opts.sinceHours,
+      },
+      reportDateStr: today,
+    };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    dateFilter: {
+      sinceHours: 24,
+    },
+    reportDateStr: today,
+  };
+}
+

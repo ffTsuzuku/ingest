@@ -56,6 +56,10 @@ ingest ~/.config/ingest/config.jsonc
 # Run report for a specific repository on a specific date
 ingest --repo /path/to/repo --date 2026-04-05
 
+# Run report for a date range (e.g. weekly summary)
+ingest --repo /path/to/repo --date 2026-04-01..2026-04-07
+ingest --repo /path/to/repo --since 2026-04-01 --until 2026-04-07
+
 # Enable deep-dive code diff analysis
 ingest --repo /path/to/repo --diff
 
