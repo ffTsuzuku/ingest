@@ -4,7 +4,7 @@ import { promptConfirm, promptSelect, promptText } from "./prompt.js";
 import { showTerminalPager } from "./pager.js";
 import { ConfigManager } from "../config/manager.js";
 import type { AppConfig, RepoConfig } from "../config/types.js";
-import { isGitRepo, getCurrentBranch, resolveRepoPath, getGitBranches } from "../git/runner.js";
+import { isGitRepo, getCurrentBranch, resolveRepoPath, getGitBranches, getRepoName } from "../git/runner.js";
 import { fetchRepoCommits } from "../git/log.js";
 import { fetchDiffStat } from "../git/diff.js";
 import { AIFactory } from "../ai/factory.js";
@@ -149,8 +149,9 @@ export class InteractiveTUI {
 
     for (const repo of ctx.config.repos) {
       if (repo.path !== ctx.currentRepoPath) {
+        const name = await getRepoName(repo.path, repo.repo_name);
         repoChoices.push({
-          label: `📁 ${repo.repo_name || repo.path}`,
+          label: `📁 ${name} (${repo.path})`,
           value: repo.path,
         });
       }
@@ -230,7 +231,7 @@ export class InteractiveTUI {
 
     for (const repo of targetRepos) {
       const repoPath = await resolveRepoPath(repo.path);
-      const repoName = repo.repo_name || repoPath.split("/").pop() || "repository";
+      const repoName = await getRepoName(repoPath, repo.repo_name);
       const branches = repo.branches && repo.branches.length > 0 ? repo.branches : ["main"];
 
       console.log(`\n${ANSI.bold}Processing:${ANSI.reset} ${ANSI.cyan}${repoName}${ANSI.reset} (${repoPath})`);
@@ -411,9 +412,10 @@ export class InteractiveTUI {
         Logger.warn("Current repository is already in the configuration.");
       } else {
         const branches = await getGitBranches(ctx.currentRepoPath);
+        const detectedName = await getRepoName(ctx.currentRepoPath);
         ctx.config.repos.push({
           path: ctx.currentRepoPath,
-          repo_name: ctx.currentRepoPath.split("/").pop() || null,
+          repo_name: detectedName,
           branches: branches.length > 0 ? branches.slice(0, 2) : ["main"],
           custom_prompt: null,
           custom_prompt_file: null,

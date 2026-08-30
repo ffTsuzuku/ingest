@@ -39,7 +39,7 @@ graph TD
 - **`manager.ts`**: Loads configs from custom paths or `~/.config/ingest/config.jsonc`, initializes defaults if missing, validates fields, and supports persistent updates.
 
 ### 2.2. `src/git/`
-- **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, and lists local/remote branches.
+- **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, lists local/remote branches, and infers canonical repository names (via Git remote origin URLs, worktree common directories, or folder paths).
 - **`log.ts`**: Queries Git commit history across specified branches within flexible time windows (`--since`, `--until`), extracting author names, emails, hashes, commit subjects, and file change lists.
 - **`diff.ts`**: Analyzes repository file stats (`git diff --stat`) and patch excerpts for deep-dive AI context.
 

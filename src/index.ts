@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 import { ConfigManager } from "./config/manager.js";
 import { InteractiveTUI } from "./tui/menu.js";
-import { isGitRepo, resolveRepoPath, getGitBranches } from "./git/runner.js";
+import { isGitRepo, resolveRepoPath, getGitBranches, getRepoName } from "./git/runner.js";
 import { fetchRepoCommits } from "./git/log.js";
 import { fetchDiffStat } from "./git/diff.js";
 import { AIFactory } from "./ai/factory.js";
@@ -139,7 +139,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   for (const repo of targetRepos) {
     try {
       const repoPath = await resolveRepoPath(repo.path);
-      const repoName = repo.repo_name || repoPath.split("/").pop() || "repository";
+      const repoName = await getRepoName(repoPath, repo.repo_name);
       const branches = repo.branches && repo.branches.length > 0 ? repo.branches : ["main"];
 
       console.log(`\n\x1b[1mAnalyzing repo:\x1b[0m \x1b[36m${repoName}\x1b[0m (${repoPath})`);

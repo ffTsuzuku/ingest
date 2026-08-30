@@ -40,7 +40,7 @@ export class ConfigManager {
   "repos": [
     // {
     //   "path": "/path/to/repo",
-    //   "repo_name": null, // null = auto basename
+    //   "repo_name": null, // null = auto detect from Git remote origin or repository name
     //   "branches": ["main"],
     //   "custom_prompt": null,
     //   "diff_mode": true

@@ -80,7 +80,7 @@ ingest --schedule-remove
   "repos": [
     {
       "path": "/path/to/repo",
-      "repo_name": null, // null = auto basename
+      "repo_name": null, // null = auto detect from Git remote origin or repository name
       "branches": ["main", "dev"],
       "custom_prompt": null,
       "diff_mode": true
