@@ -40,42 +40,42 @@ export class InteractiveTUI {
       this.printBanner();
 
       if (ctx.isCurrentDirRepo) {
-        console.log(`  ${ANSI.dim}📍 Current Directory is a Git Repo:${ANSI.reset} ${ANSI.cyan}${cwd}${ANSI.reset}\n`);
+        console.log(`  ${ANSI.dim} Current Directory is a Git Repo:${ANSI.reset} ${ANSI.cyan}${cwd}${ANSI.reset}\n`);
       }
 
       const choices = [
         {
-          label: "📊 Generate Git Report (Daily / Custom Date)",
+          label: " Generate Git Report (Daily / Custom Date)",
           value: "generate",
           hint: "Single repo or all configured repositories",
         },
         {
-          label: "📖 View Historical Reports (Markdown Explorer)",
+          label: " View Historical Reports (Markdown Explorer)",
           value: "view",
           hint: "Browse past summaries in styled terminal pager",
         },
         {
-          label: "⏰ Scheduler Automation Wizard (Launchd / Cron)",
+          label: " Scheduler Automation Wizard (Launchd / Cron)",
           value: "schedule",
           hint: "Setup or manage automated report runs",
         },
         {
-          label: "✏️  Repo Settings & Custom Prompts",
+          label: " Repo Settings & Custom Prompts",
           value: "settings",
           hint: "Configure monitored repos and custom prompt templates",
         },
         {
-          label: "🤖 Install Global AI Agent Skill",
+          label: " Install Global AI Agent Skill",
           value: "skill",
           hint: "Deploy skill to ~/.gemini/config/skills/ingest/",
         },
         {
-          label: "🩺 Test AI Provider Connection",
+          label: " Test AI Provider Connection",
           value: "test-ai",
           hint: "Verify Antigravity (agy) / Opencode CLI integration",
         },
         {
-          label: "🚪 Exit",
+          label: " Exit",
           value: "exit",
         },
       ];
@@ -86,7 +86,7 @@ export class InteractiveTUI {
       });
 
       if (!action || action === "exit") {
-        console.log(`\n${ANSI.gray}Goodbye! 👋${ANSI.reset}\n`);
+        console.log(`\n${ANSI.gray}Goodbye! ${ANSI.reset}\n`);
         break;
       }
 
@@ -122,7 +122,7 @@ export class InteractiveTUI {
       `${ANSI.bold}${ANSI.brightCyan}INGEST${ANSI.reset} ${ANSI.gray}- AI Daily Report Generator & Git Intelligence${ANSI.reset}`,
       `${ANSI.dim}Zero-Dependency TUI | Deep-Dive Diffs | Auto-Scheduler | Global AI Skill${ANSI.reset}`,
     ];
-    console.log(drawBox("⚡ ingest", bannerLines, 74).join("\n"));
+    console.log(drawBox(" ingest", bannerLines, 74).join("\n"));
     console.log("");
   }
 
@@ -133,7 +133,7 @@ export class InteractiveTUI {
     const repoChoices: Array<{ label: string; value: string }> = [];
     if (ctx.isCurrentDirRepo && ctx.currentRepoPath) {
       repoChoices.push({
-        label: `📍 Current Repository (${ctx.currentRepoPath})`,
+        label: ` Current Repository (${ctx.currentRepoPath})`,
         value: ctx.currentRepoPath,
       });
     }
@@ -142,26 +142,26 @@ export class InteractiveTUI {
       if (repo.path !== ctx.currentRepoPath) {
         const name = await getRepoName(repo.path, repo.repo_name);
         repoChoices.push({
-          label: `📁 ${name} (${repo.path})`,
+          label: ` ${name} (${repo.path})`,
           value: repo.path,
         });
       }
     }
 
     repoChoices.push({
-      label: "✨ Enter another repository path...",
+      label: " Enter another repository path...",
       value: "__custom__",
     });
 
     if (ctx.config.repos.length > 1) {
       repoChoices.push({
-        label: "🌐 All Configured Repositories",
+        label: " All Configured Repositories",
         value: "__all__",
       });
     }
 
     repoChoices.push({
-      label: "🔙 Back",
+      label: " Back",
       value: "__back__",
     });
 
@@ -198,11 +198,11 @@ export class InteractiveTUI {
     const dateChoice = await promptSelect({
       message: "Select reporting time window:",
       choices: [
-        { label: "🕒 Last 24 Hours (Default)", value: "24h" },
-        { label: "📅 Today (from 00:00 local time)", value: "today" },
-        { label: "🗓️  Custom Specific Date (YYYY-MM-DD)", value: "custom_date" },
-        { label: "⏳ Last 7 Days", value: "7d" },
-        { label: "🔙 Back", value: "__back__" },
+        { label: " Last 24 Hours (Default)", value: "24h" },
+        { label: " Today (from 00:00 local time)", value: "today" },
+        { label: " Custom Specific Date (YYYY-MM-DD)", value: "custom_date" },
+        { label: " Last 7 Days", value: "7d" },
+        { label: " Back", value: "__back__" },
       ],
     });
 
@@ -233,9 +233,9 @@ export class InteractiveTUI {
     const diffChoice = await promptSelect({
       message: "Select analysis depth:",
       choices: [
-        { label: "🔍 Diff Deep-Dive (Inspect code diff stats & file changes)", value: "deep", hint: "Recommended" },
-        { label: "⚡ Standard Log (Commit messages & metadata only)", value: "standard" },
-        { label: "🔙 Back", value: "__back__" },
+        { label: " Diff Deep-Dive (Inspect code diff stats & file changes)", value: "deep", hint: "Recommended" },
+        { label: " Standard Log (Commit messages & metadata only)", value: "standard" },
+        { label: " Back", value: "__back__" },
       ],
     });
 
@@ -287,7 +287,7 @@ export class InteractiveTUI {
         reportMarkdown = res.markdown;
         reportMeta = res.meta;
       } else {
-        console.log(`  ${ANSI.magenta}🤖 Calling AI Provider (${ctx.config.defaultProvider})...${ANSI.reset}`);
+        console.log(`  ${ANSI.magenta} Calling AI Provider (${ctx.config.defaultProvider})...${ANSI.reset}`);
         const provider = AIFactory.getProvider(ctx.config);
         const aiResult = await provider.analyze(analysisContext);
         const res = formatReportMarkdown(analysisContext, aiResult);
@@ -314,13 +314,13 @@ export class InteractiveTUI {
       }
 
       const choices = reports.slice(0, 30).map((r) => ({
-        label: `📄 ${r.repoName} [${r.dateStr}]`,
+        label: ` ${r.repoName} [${r.dateStr}]`,
         value: r.filePath,
         hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
       }));
 
       choices.push({
-        label: "🔙 Back",
+        label: " Back",
         value: "__back__",
         hint: "",
       });
@@ -354,9 +354,9 @@ export class InteractiveTUI {
       console.log(`  • Crontab: ${cronStatus.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${cronStatus.details})\n`);
 
       const choices = [
-        { label: "🚀 Install / Update Daily Report Schedule", value: "install" },
-        { label: "🛑 Remove / Disable Automated Schedules", value: "uninstall" },
-        { label: "🔙 Back", value: "back" },
+        { label: " Install / Update Daily Report Schedule", value: "install" },
+        { label: " Remove / Disable Automated Schedules", value: "uninstall" },
+        { label: " Back", value: "back" },
       ];
 
       const action = await promptSelect({
@@ -378,9 +378,9 @@ export class InteractiveTUI {
           ? await promptSelect({
               message: "Select automation engine:",
               choices: [
-                { label: "🍏 macOS LaunchAgent (Recommended for Mac)", value: "launchd" },
-                { label: "⚙️  Standard Crontab", value: "cron" },
-                { label: "🔙 Back", value: "back" },
+                { label: " macOS LaunchAgent (Recommended for Mac)", value: "launchd" },
+                { label: " Standard Crontab", value: "cron" },
+                { label: " Back", value: "back" },
               ],
             })
           : "cron";
@@ -423,10 +423,10 @@ export class InteractiveTUI {
       const action = await promptSelect({
         message: "What would you like to configure?",
         choices: [
-          { label: "➕ Add Current Directory to Monitored Repos", value: "add_cwd" },
-          { label: "📝 Edit Default AI Prompt Template", value: "edit_prompt" },
-          { label: "🔄 Switch Default AI Provider (Opencode / Gemini CLI)", value: "switch_provider" },
-          { label: "🔙 Back", value: "back" },
+          { label: " Add Current Directory to Monitored Repos", value: "add_cwd" },
+          { label: " Edit Default AI Prompt Template", value: "edit_prompt" },
+          { label: " Switch Default AI Provider (Antigravity / Opencode / Gemini CLI)", value: "switch_provider" },
+          { label: " Back", value: "back" },
         ],
       });
 
@@ -465,9 +465,10 @@ export class InteractiveTUI {
         const newProvider = await promptSelect<"antigravity" | "opencode" | "gemini-cli">({
           message: "Select default AI provider:",
           choices: [
-            { label: "Antigravity CLI (agy)", value: "antigravity" },
-            { label: "Opencode CLI (Local/OpenAI)", value: "opencode" },
-            { label: "🔙 Back", value: "back" as any },
+            { label: " Antigravity CLI (agy)", value: "antigravity" },
+            { label: " Opencode CLI (Local/OpenAI)", value: "opencode" },
+            { label: " Gemini CLI", value: "gemini-cli" },
+            { label: " Back", value: "back" as any },
           ],
         });
         if (newProvider && (newProvider as string) !== "back") {
@@ -484,9 +485,9 @@ export class InteractiveTUI {
     const target = await promptSelect({
       message: "Where would you like to install the ingest AI skill?",
       choices: [
-        { label: "🌐 Global Agent Directory (~/.gemini/config/skills/ingest/)", value: "global" },
-        { label: "📁 Local Workspace Directory (.agents/skills/ingest/)", value: "workspace" },
-        { label: "🔙 Back", value: "back" },
+        { label: " Global Agent Directory (~/.gemini/config/skills/ingest/)", value: "global" },
+        { label: " Local Workspace Directory (.agents/skills/ingest/)", value: "workspace" },
+        { label: " Back", value: "back" },
       ],
     });
 
