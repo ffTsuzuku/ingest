@@ -99,6 +99,48 @@ describe("Markdown Terminal Renderer", () => {
     assert.ok(plainText.includes("New Ingest CLI"));
     assert.ok(plainText.includes("└"));
   });
+
+  it("should wrap long table cell text across multiple lines within column width", () => {
+    const md = `
+| Setting | Old Behavior | New Behavior / Migration Impact |
+| :--- | :--- | :--- |
+| \`retention_days\` | Reports were stored indefinitely with no automatic expiration | Configurable retention period in days (default: 30) automatically prunes older markdown reports |
+`;
+    const lines = renderMarkdownToAnsi(md, 70);
+    const plainText = lines.map(stripAnsi).join("\n");
+
+    assert.ok(plainText.includes("Configurable"));
+    assert.ok(plainText.includes("automatically"));
+    assert.ok(plainText.includes("prunes"));
+    assert.ok(plainText.includes("indefinitely"));
+    for (const l of lines) {
+      assert.ok(visibleLength(l) <= 70, `Line "${l}" (${visibleLength(l)}) exceeds max width 70`);
+    }
+  });
+
+  it("should format mermaid diagrams into clean ANSI components and execution flows", () => {
+    const md = `\`\`\`mermaid
+flowchart TD
+  CLI["CLI Parser<br/><code>src/index.ts</code>"]
+  TUI["Terminal UI<br/><code>src/tui/</code>"]
+  CLI -->|Interactive Mode| TUI
+  CLI -->|Headless| Engine
+\`\`\``;
+
+    const lines = renderMarkdownToAnsi(md);
+    const plainText = lines.map(stripAnsi).join("\n");
+
+    assert.ok(plainText.includes("Architecture & Execution Flow"));
+    assert.ok(plainText.includes("Architecture Components:"));
+    assert.ok(plainText.includes("CLI"));
+    assert.ok(plainText.includes("CLI Parser (src/index.ts)"));
+    assert.ok(plainText.includes("Execution & Dependency Flows:"));
+    assert.ok(plainText.includes("CLI ──[Interactive Mode]──► TUI"));
+    assert.ok(plainText.includes("CLI ──[Headless]──► Engine"));
+    assert.ok(!plainText.includes("<br/>"));
+    assert.ok(!plainText.includes("<code>"));
+  });
 });
+
 
 

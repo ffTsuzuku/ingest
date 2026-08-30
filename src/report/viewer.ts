@@ -1,5 +1,202 @@
 import { readFile } from "node:fs/promises";
-import { ANSI, stripAnsi, wrapAnsiLine } from "../tui/ansi.js";
+import { ANSI, stripAnsi, wrapAnsiLine, visibleLength } from "../tui/ansi.js";
+
+export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): string[] {
+  const barWidth = Math.max(20, Math.min(contentWidth - 4, 72));
+  const output: string[] = [];
+
+  output.push("");
+  output.push(`  ${ANSI.gray}╭── ${ANSI.bold}${ANSI.brightCyan}[📊 Architecture & Execution Flow]${ANSI.reset} ${ANSI.gray}${"─".repeat(Math.max(2, barWidth - 36))}${ANSI.reset}`);
+  output.push(`  ${ANSI.gray}│${ANSI.reset}`);
+
+  const nodes = new Map<string, string>();
+  const flows: Array<{ from: string; to: string; label?: string }> = [];
+
+  const cleanText = (str: string): string => {
+    return str
+      .replace(/<br\s*\/?>\s*<code>(.*?)<\/code>/gi, " ($1)")
+      .replace(/<br\s*\/?>/gi, " - ")
+      .replace(/<code>(.*?)<\/code>/gi, "($1)")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\\n/g, " ")
+      .replace(/"/g, "")
+      .trim();
+  };
+
+  for (const rawLine of codeLines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("flowchart") || line.startsWith("graph") || line.startsWith("sequenceDiagram")) {
+      continue;
+    }
+
+    // 1. Node declarations: ID["Label<br/><code>path</code>"] or ID[Label]
+    const nodeMatch = line.match(/^([A-Za-z0-9_-]+)\s*(?:\["([^"]+)"\]|\[([^\]]+)\]|\("([^"]+)"\)|\(([^)]+)\))/);
+    if (nodeMatch) {
+      const id = nodeMatch[1]!;
+      const label = cleanText(nodeMatch[2] || nodeMatch[3] || nodeMatch[4] || nodeMatch[5] || id);
+      nodes.set(id, label);
+    }
+
+    // 2. Connection flows: A -->|Label| B or A --> B
+    const flowMatch = line.match(/([A-Za-z0-9_-]+)\s*(?:-->|==>|-\.->)\s*(?:\|([^|]+)\|)?\s*([A-Za-z0-9_-]+)/);
+    if (flowMatch) {
+      const from = flowMatch[1]!;
+      const label = flowMatch[2] ? cleanText(flowMatch[2]) : undefined;
+      const to = flowMatch[3]!;
+      flows.push({ from, to, label });
+    }
+  }
+
+  // If we parsed nodes, output component summary
+  if (nodes.size > 0) {
+    output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.bold}${ANSI.yellow}◆ Architecture Components:${ANSI.reset}`);
+    const maxIdLen = Math.max(...Array.from(nodes.keys()).map((k) => k.length));
+
+    for (const [id, label] of nodes.entries()) {
+      const pad = " ".repeat(Math.max(1, maxIdLen - id.length + 1));
+      const formattedLabel = formatInlineMarkdown(label);
+      const line = `  ${ANSI.gray}│${ANSI.reset}    ${ANSI.cyan}•${ANSI.reset} ${ANSI.bold}${ANSI.brightWhite}${id}${ANSI.reset}${pad}${ANSI.gray}│${ANSI.reset} ${formattedLabel}`;
+      const wrapped = wrapAnsiLine(line, contentWidth, `  ${ANSI.gray}│${ANSI.reset}      ${" ".repeat(maxIdLen + 2)}`);
+      output.push(...wrapped);
+    }
+    output.push(`  ${ANSI.gray}│${ANSI.reset}`);
+  }
+
+  // If we parsed flows, output execution flows
+  if (flows.length > 0) {
+    output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.bold}${ANSI.yellow}▸ Execution & Dependency Flows:${ANSI.reset}`);
+    for (const flow of flows) {
+      const fromName = `${ANSI.bold}${ANSI.brightWhite}${flow.from}${ANSI.reset}`;
+      const toName = `${ANSI.bold}${ANSI.brightWhite}${flow.to}${ANSI.reset}`;
+      const arrow = flow.label
+        ? `${ANSI.gray}──[${ANSI.cyan}${flow.label}${ANSI.gray}]──►${ANSI.reset}`
+        : `${ANSI.gray}────►${ANSI.reset}`;
+
+      const flowLine = `  ${ANSI.gray}│${ANSI.reset}    ${fromName} ${arrow} ${toName}`;
+      const wrapped = wrapAnsiLine(flowLine, contentWidth, `  ${ANSI.gray}│${ANSI.reset}      `);
+      output.push(...wrapped);
+    }
+    output.push(`  ${ANSI.gray}│${ANSI.reset}`);
+  }
+
+  // Fallback if unstructured
+  if (nodes.size === 0 && flows.length === 0) {
+    for (const raw of codeLines) {
+      const cleaned = cleanText(raw);
+      if (!cleaned) continue;
+      const line = `  ${ANSI.gray}│${ANSI.reset}  ${ANSI.cyan}${cleaned}${ANSI.reset}`;
+      output.push(...wrapAnsiLine(line, contentWidth, `  ${ANSI.gray}│${ANSI.reset}    `));
+    }
+    output.push(`  ${ANSI.gray}│${ANSI.reset}`);
+  }
+
+  // Tip badge
+  output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.dim}${ANSI.italic}💡 Tip: Launch interactive pan/zoom diagrams with '${ANSI.yellow}ingest --ui${ANSI.reset}${ANSI.dim}${ANSI.italic}'${ANSI.reset}`);
+  output.push(`  ${ANSI.gray}╰${"─".repeat(barWidth)}${ANSI.reset}`);
+  output.push("");
+
+  return output;
+}
+
+export function renderTableToAnsi(headers: string[], rows: string[][], contentWidth: number): string[] {
+  if (headers.length === 0) return [];
+  const colCount = headers.length;
+  const borderOverhead = 3 * colCount + 3;
+  const availableWidth = Math.max(colCount * 6, contentWidth - borderOverhead);
+
+  // 1. Natural widths
+  const naturalWidths = headers.map((h, colIdx) => {
+    let max = visibleLength(formatInlineMarkdown(h));
+    for (const row of rows) {
+      const cell = row[colIdx] ?? "";
+      const len = visibleLength(formatInlineMarkdown(cell));
+      if (len > max) max = len;
+    }
+    return Math.max(4, max);
+  });
+
+  const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
+
+  // 2. Proportional distribution
+  let colWidths: number[];
+  if (totalNatural <= availableWidth) {
+    colWidths = [...naturalWidths];
+  } else {
+    colWidths = naturalWidths.map((w) => Math.max(6, Math.floor((w / totalNatural) * availableWidth)));
+    let currentTotal = colWidths.reduce((a, b) => a + b, 0);
+    let diff = availableWidth - currentTotal;
+    let idx = 0;
+    while (diff > 0 && idx < colCount) {
+      colWidths[idx]! += 1;
+      diff--;
+      idx = (idx + 1) % colCount;
+    }
+  }
+
+  const output: string[] = [];
+
+  // Top border: ┌──────┬──────┐
+  const topBorder = `  ${ANSI.gray}┌${colWidths.map((w) => "─".repeat(w + 2)).join("┬")}┐${ANSI.reset}`;
+  output.push("");
+  output.push(topBorder);
+
+  // Header row
+  const headerWrapped = headers.map((h, colIdx) => {
+    const formatted = `${ANSI.bold}${ANSI.brightCyan}${formatInlineMarkdown(h)}${ANSI.reset}`;
+    return wrapAnsiLine(formatted, colWidths[colIdx] ?? 10);
+  });
+  const headerHeight = Math.max(...headerWrapped.map((lines) => lines.length), 1);
+
+  for (let lineIdx = 0; lineIdx < headerHeight; lineIdx++) {
+    const cells = headers.map((_, colIdx) => {
+      const w = colWidths[colIdx] ?? 10;
+      const lineText = headerWrapped[colIdx]?.[lineIdx] ?? "";
+      const vis = visibleLength(lineText);
+      const pad = Math.max(0, w - vis);
+      return `${lineText}${" ".repeat(pad)}`;
+    });
+    output.push(`  ${ANSI.gray}│${ANSI.reset} ` + cells.join(` ${ANSI.gray}│${ANSI.reset} `) + ` ${ANSI.gray}│${ANSI.reset}`);
+  }
+
+  // Mid border: ├──────┼──────┤
+  const midBorder = `  ${ANSI.gray}├${colWidths.map((w) => "─".repeat(w + 2)).join("┼")}┤${ANSI.reset}`;
+  output.push(midBorder);
+
+  // Data rows
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]!;
+    const rowWrapped = headers.map((_, colIdx) => {
+      const cellText = row[colIdx] ?? "";
+      const formatted = formatInlineMarkdown(cellText);
+      return wrapAnsiLine(formatted, colWidths[colIdx] ?? 10);
+    });
+    const rowHeight = Math.max(...rowWrapped.map((lines) => lines.length), 1);
+
+    for (let lineIdx = 0; lineIdx < rowHeight; lineIdx++) {
+      const cells = headers.map((_, colIdx) => {
+        const w = colWidths[colIdx] ?? 10;
+        const lineText = rowWrapped[colIdx]?.[lineIdx] ?? "";
+        const vis = visibleLength(lineText);
+        const pad = Math.max(0, w - vis);
+        return `${lineText}${" ".repeat(pad)}`;
+      });
+      output.push(`  ${ANSI.gray}│${ANSI.reset} ` + cells.join(` ${ANSI.gray}│${ANSI.reset} `) + ` ${ANSI.gray}│${ANSI.reset}`);
+    }
+
+    // Row divider if more rows follow
+    if (r < rows.length - 1) {
+      const rowDivider = `  ${ANSI.gray}├${colWidths.map((w) => "─".repeat(w + 2)).join("┼")}┤${ANSI.reset}`;
+      output.push(rowDivider);
+    }
+  }
+
+  // Bottom border: └──────┴──────┘
+  const bottomBorder = `  ${ANSI.gray}└${colWidths.map((w) => "─".repeat(w + 2)).join("┴")}┘${ANSI.reset}`;
+  output.push(bottomBorder);
+  output.push("");
+
+  return output;
+}
 
 export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): string[] {
   const terminalWidth = maxWidth ?? (process.stdout.columns ? Math.max(40, process.stdout.columns) : 80);
@@ -8,6 +205,7 @@ export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): strin
   const output: string[] = [];
   let inCodeBlock = false;
   let codeBlockLang = "";
+  let codeBuffer: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i] ?? "";
@@ -17,41 +215,59 @@ export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): strin
     if (codeBlockMatch) {
       if (inCodeBlock) {
         inCodeBlock = false;
-        const barWidth = Math.max(16, Math.min(contentWidth - 4, 64));
-        output.push(`  ${ANSI.gray}╰${"─".repeat(barWidth)}${ANSI.reset}`);
+        const isMermaid =
+          codeBlockLang === "mermaid" ||
+          (!codeBlockLang && codeBuffer.some((l) => /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram)\b/i.test(l.trim()))) ||
+          (codeBlockLang === "text" && codeBuffer.some((l) => /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram)\b/i.test(l.trim())));
+
+        if (isMermaid) {
+          output.push(...renderMermaidToAnsi(codeBuffer, contentWidth));
+        } else {
+          const langBadge = codeBlockLang ? ` ${ANSI.bold}${ANSI.cyan}[${codeBlockLang}]${ANSI.gray} ` : " ";
+          const langLen = codeBlockLang ? codeBlockLang.length + 4 : 1;
+          const barWidth = Math.max(10, Math.min(contentWidth - 6 - langLen, 58));
+          output.push(`  ${ANSI.gray}╭──${langBadge}${"─".repeat(barWidth)}${ANSI.reset}`);
+
+          for (const rawCodeLine of codeBuffer) {
+            let codeFormatted = rawCodeLine;
+            if (codeBlockLang === "diff") {
+              if (rawCodeLine.startsWith("+") && !rawCodeLine.startsWith("+++")) {
+                codeFormatted = `${ANSI.green}${rawCodeLine}${ANSI.reset}`;
+              } else if (rawCodeLine.startsWith("-") && !rawCodeLine.startsWith("---")) {
+                codeFormatted = `${ANSI.red}${rawCodeLine}${ANSI.reset}`;
+              } else if (rawCodeLine.startsWith("@@")) {
+                codeFormatted = `${ANSI.cyan}${rawCodeLine}${ANSI.reset}`;
+              } else if (rawCodeLine.startsWith("diff --git") || rawCodeLine.startsWith("---") || rawCodeLine.startsWith("+++")) {
+                codeFormatted = `${ANSI.bold}${ANSI.yellow}${rawCodeLine}${ANSI.reset}`;
+              } else {
+                codeFormatted = `${ANSI.dim}${rawCodeLine}${ANSI.reset}`;
+              }
+            } else {
+              codeFormatted = `${ANSI.brightWhite}${rawCodeLine}${ANSI.reset}`;
+            }
+
+            const prefix = `  ${ANSI.gray}│${ANSI.reset} `;
+            const hanging = `  ${ANSI.gray}│${ANSI.reset}   `;
+            const wrapped = wrapAnsiLine(`${prefix}${codeFormatted}`, contentWidth, hanging);
+            output.push(...wrapped);
+          }
+
+          const endBarWidth = Math.max(16, Math.min(contentWidth - 4, 64));
+          output.push(`  ${ANSI.gray}╰${"─".repeat(endBarWidth)}${ANSI.reset}`);
+        }
+
+        codeBuffer = [];
+        codeBlockLang = "";
       } else {
         inCodeBlock = true;
         codeBlockLang = (codeBlockMatch[1] ?? "").toLowerCase();
-        const langBadge = codeBlockLang ? ` ${ANSI.bold}${ANSI.cyan}[${codeBlockLang}]${ANSI.gray} ` : " ";
-        const langLen = codeBlockLang ? codeBlockLang.length + 4 : 1;
-        const barWidth = Math.max(10, Math.min(contentWidth - 6 - langLen, 58));
-        output.push(`  ${ANSI.gray}╭──${langBadge}${"─".repeat(barWidth)}${ANSI.reset}`);
+        codeBuffer = [];
       }
       continue;
     }
 
     if (inCodeBlock) {
-      let codeFormatted = rawLine;
-      if (codeBlockLang === "diff") {
-        if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
-          codeFormatted = `${ANSI.green}${rawLine}${ANSI.reset}`;
-        } else if (rawLine.startsWith("-") && !rawLine.startsWith("---")) {
-          codeFormatted = `${ANSI.red}${rawLine}${ANSI.reset}`;
-        } else if (rawLine.startsWith("@@")) {
-          codeFormatted = `${ANSI.cyan}${rawLine}${ANSI.reset}`;
-        } else if (rawLine.startsWith("diff --git") || rawLine.startsWith("---") || rawLine.startsWith("+++")) {
-          codeFormatted = `${ANSI.bold}${ANSI.yellow}${rawLine}${ANSI.reset}`;
-        } else {
-          codeFormatted = `${ANSI.dim}${rawLine}${ANSI.reset}`;
-        }
-      } else {
-        codeFormatted = `${ANSI.brightWhite}${rawLine}${ANSI.reset}`;
-      }
-
-      const prefix = `  ${ANSI.gray}│${ANSI.reset} `;
-      const hanging = `  ${ANSI.gray}│${ANSI.reset}   `;
-      const wrapped = wrapAnsiLine(`${prefix}${codeFormatted}`, contentWidth, hanging);
-      output.push(...wrapped);
+      codeBuffer.push(rawLine);
       continue;
     }
 
@@ -95,6 +311,7 @@ export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): strin
       const prefix = `      ${ANSI.bold}${ANSI.cyan}▫  `;
       const hanging = "         ";
       const wrapped = wrapAnsiLine(`${prefix}${formattedSubSub}${ANSI.reset}`, contentWidth, hanging);
+      output.push("");
       output.push(...wrapped);
       continue;
     }
@@ -139,63 +356,7 @@ export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): strin
           rows.push(parseRow(lines[i] ?? ""));
         }
 
-        // Calculate column widths
-        const colWidths = headers.map((h, colIdx) => {
-          let maxLen = stripAnsi(formatInlineMarkdown(h)).length;
-          for (const row of rows) {
-            const cell = row[colIdx] ?? "";
-            const cellLen = stripAnsi(formatInlineMarkdown(cell)).length;
-            if (cellLen > maxLen) maxLen = cellLen;
-          }
-          return Math.max(4, Math.min(maxLen, 45));
-        });
-
-        // Top border: ┌──────┬──────┐
-        const topBorder = `  ${ANSI.gray}┌${colWidths.map((w) => "─".repeat(w + 2)).join("┬")}┐${ANSI.reset}`;
-        output.push("");
-        output.push(topBorder);
-
-        // Header row
-        const headerRow =
-          `  ${ANSI.gray}│${ANSI.reset} ` +
-          headers
-            .map((h, idx) => {
-              const w = colWidths[idx] ?? 10;
-              const formatted = formatInlineMarkdown(h);
-              const visLen = stripAnsi(formatted).length;
-              const pad = Math.max(0, w - visLen);
-              return `${ANSI.bold}${ANSI.brightCyan}${formatted}${ANSI.reset}${" ".repeat(pad)}`;
-            })
-            .join(` ${ANSI.gray}│${ANSI.reset} `) +
-          ` ${ANSI.gray}│${ANSI.reset}`;
-        output.push(headerRow);
-
-        // Mid border: ├──────┼──────┤
-        const midBorder = `  ${ANSI.gray}├${colWidths.map((w) => "─".repeat(w + 2)).join("┼")}┤${ANSI.reset}`;
-        output.push(midBorder);
-
-        // Data rows
-        for (const row of rows) {
-          const rowStr =
-            `  ${ANSI.gray}│${ANSI.reset} ` +
-            headers
-              .map((_, idx) => {
-                const w = colWidths[idx] ?? 10;
-                const cell = row[idx] ?? "";
-                const formatted = formatInlineMarkdown(cell);
-                const visLen = stripAnsi(formatted).length;
-                const pad = Math.max(0, w - visLen);
-                return `${formatted}${" ".repeat(pad)}`;
-              })
-              .join(` ${ANSI.gray}│${ANSI.reset} `) +
-            ` ${ANSI.gray}│${ANSI.reset}`;
-          output.push(rowStr);
-        }
-
-        // Bottom border: └──────┴──────┘
-        const bottomBorder = `  ${ANSI.gray}└${colWidths.map((w) => "─".repeat(w + 2)).join("┴")}┘${ANSI.reset}`;
-        output.push(bottomBorder);
-        output.push("");
+        output.push(...renderTableToAnsi(headers, rows, contentWidth));
         continue;
       }
     }
