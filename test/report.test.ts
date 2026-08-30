@@ -83,6 +83,57 @@ describe("Report Storage & Expiration", () => {
     }
   });
 
+  it("should include reportStyle in filename and allow multiple styles on same date without overwriting", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-storage-styles-"));
+    try {
+      // 1. Save standard/default report
+      const defaultReport = await ReportStorage.saveReport(
+        tempDir,
+        {
+          repoName: "multi-style-repo",
+          repoPath: "/tmp/multi",
+          branches: ["main"],
+          dateStr: "2026-08-30",
+          generatedAt: new Date().toISOString(),
+          providerLabel: "antigravity",
+          commitCount: 5,
+          reportStyle: "default",
+        },
+        "# Standard Engineering Report",
+      );
+
+      // 2. Save system-centric report for the exact same date & repo
+      const systemReport = await ReportStorage.saveReport(
+        tempDir,
+        {
+          repoName: "multi-style-repo",
+          repoPath: "/tmp/multi",
+          branches: ["main"],
+          dateStr: "2026-08-30",
+          generatedAt: new Date().toISOString(),
+          providerLabel: "antigravity",
+          commitCount: 5,
+          reportStyle: "system-centric",
+        },
+        "# System-Centric Architecture Report",
+      );
+
+      assert.ok(defaultReport.filePath.endsWith("multi-style-repo/2026-08-30-summary.md"));
+      assert.ok(systemReport.filePath.endsWith("multi-style-repo/2026-08-30-system-centric-summary.md"));
+      assert.notEqual(defaultReport.filePath, systemReport.filePath);
+
+      const list = await ReportStorage.listReports(tempDir);
+      assert.equal(list.length, 2);
+
+      const systemItem = list.find((r) => r.reportStyle === "system-centric");
+      assert.ok(systemItem);
+      assert.equal(systemItem?.dateStr, "2026-08-30");
+      assert.equal(systemItem?.fileName, "2026-08-30-system-centric-summary.md");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("should prune expired reports older than retentionDays", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "ingest-expiration-"));
     try {

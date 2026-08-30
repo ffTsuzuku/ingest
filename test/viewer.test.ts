@@ -80,5 +80,25 @@ describe("Markdown Terminal Renderer", () => {
     assert.ok(truncatedStyled.includes("\x1b[1m"));
     assert.ok(truncatedStyled.endsWith("…"));
   });
+
+  it("should render markdown tables with clean box borders", () => {
+    const md = `
+| Before | Now | Impact |
+| :--- | :--- | :--- |
+| Old CLI | New Ingest CLI | Improved UX |
+| Single Repo | Multi-Repo | Centralized |
+`;
+    const lines = renderMarkdownToAnsi(md);
+    const plainText = lines.map(stripAnsi).join("\n");
+
+    assert.ok(plainText.includes("┌"));
+    assert.ok(plainText.includes("Before"));
+    assert.ok(plainText.includes("Now"));
+    assert.ok(plainText.includes("Impact"));
+    assert.ok(plainText.includes("Old CLI"));
+    assert.ok(plainText.includes("New Ingest CLI"));
+    assert.ok(plainText.includes("└"));
+  });
 });
+
 

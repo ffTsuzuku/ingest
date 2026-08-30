@@ -8,6 +8,7 @@ import { getAllGitBranches, getCurrentBranch, getGitBranches, getRepoName, isGit
 import { LaunchdScheduler } from "../scheduler/launchd.js";
 import { CronScheduler } from "../scheduler/cron.js";
 import { DEFAULT_CONFIG_PATH, DEFAULT_OUTPUT_ROOT, DEFAULT_PROMPT, resolveConfiguredPath } from "./manager.js";
+import { SYSTEM_CENTRIC_PROMPT, CHANGELOG_PROMPT, SECURITY_PROMPT } from "../ai/prompt.js";
 import { Logger } from "../utils/logger.js";
 
 export interface InitWizardOptions {
@@ -22,27 +23,35 @@ export const PROMPT_PRESETS = [
   {
     label: "🏗️  Engineering Deep Dive (Default)",
     hint: "Architecture patterns, mechanics, code diff analysis, impact",
-    prompt:
-      "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact.",
+    prompt: DEFAULT_PROMPT,
+    style: "default" as const,
+  },
+  {
+    label: "🧭 System-Centric Architecture (New)",
+    hint: "Codebase maps, causal Problem->Change->Result, behavior tables, flow diagrams",
+    prompt: SYSTEM_CENTRIC_PROMPT,
+    style: "system-centric" as const,
   },
   {
     label: "📝 Changelog & Release Notes",
     hint: "User-facing features, bug fixes, breaking changes",
-    prompt:
-      "Generate structured release changelog notes from repo commits: highlight user-facing features, critical bug fixes, breaking changes, and migration instructions.",
+    prompt: CHANGELOG_PROMPT,
+    style: "changelog" as const,
   },
   {
     label: "🛡️  Security & Risk Review",
     hint: "Security posture, dependency changes, sensitive logic",
-    prompt:
-      "Review git commits from a software security and risk perspective: audit sensitive logic changes, permission checks, dependency updates, and regression hazards.",
+    prompt: SECURITY_PROMPT,
+    style: "security" as const,
   },
   {
     label: "✏️  Custom Review Prompt",
     hint: "Write your own custom analysis prompt",
     prompt: "__custom__",
+    style: "default" as const,
   },
 ];
+
 
 export class ConfigInitWizard {
   public static async run(options: InitWizardOptions = {}): Promise<string | null> {
@@ -387,6 +396,12 @@ export class ConfigInitWizard {
     if (!promptChoice) return null;
 
     let finalPrompt = promptChoice;
+    let selectedStyle: string = "default";
+    const foundPreset = PROMPT_PRESETS.find((p) => p.prompt === promptChoice);
+    if (foundPreset) {
+      selectedStyle = foundPreset.style;
+    }
+
     if (promptChoice === "__custom__") {
       const customInput = await promptText({
         message: "Enter your custom AI prompt instructions:",
@@ -394,6 +409,7 @@ export class ConfigInitWizard {
       });
       if (customInput === null) return null;
       finalPrompt = customInput.trim() || DEFAULT_PROMPT;
+      selectedStyle = "default";
     }
 
     console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 4: Report Storage & Expiration (output_root, retention_days, error_log) ──${ANSI.reset}`);
@@ -486,6 +502,7 @@ export class ConfigInitWizard {
         retention_days: validRetentionDays,
         default_provider: providerChoice,
         prompt: finalPrompt,
+        report_style: selectedStyle,
       };
 
       if (outputRoot !== "./reports" && outputRoot !== "~/reports") {
@@ -512,6 +529,7 @@ export class ConfigInitWizard {
 // • retention_days: Report retention expiration in days (default: 30, 0 = keep forever)
 // • default_provider: "antigravity" | "opencode" | "gemini-cli"
 // • prompt: System prompt instructions guiding AI summary generation
+// • report_style: "default" | "system-centric" | "changelog" | "security"
 ${JSON.stringify(configObj, null, 2)}
 `;
       await writeFile(targetFilePath, content, "utf8");
@@ -543,6 +561,7 @@ ${JSON.stringify(configObj, null, 2)}
             branches: branches.length > 0 ? branches : ["main"],
             diff_mode: diffMode,
             max_diff_lines: maxDiffLines,
+            report_style: selectedStyle,
           },
         ]
       : [];
@@ -564,6 +583,7 @@ ${JSON.stringify(configObj, null, 2)}
         },
       },
       prompt: finalPrompt,
+      report_style: selectedStyle,
     };
 
     const content = `// Ingest Global Configuration (~/.config/ingest/config.jsonc)
@@ -577,12 +597,13 @@ ${JSON.stringify(configObj, null, 2)}
 // • default_provider: Default AI backend ("antigravity" | "opencode" | "gemini-cli")
 // • provider: Custom provider configs (endpoints, model overrides, tokens)
 // • prompt: Default engineering analysis prompt template
+// • report_style: "default" | "system-centric" | "changelog" | "security"
 ${JSON.stringify(globalObj, null, 2)}
 `;
-      await writeFile(targetFilePath, content, "utf8");
-      this.printSuccessCard(targetFilePath, "Global configuration saved successfully to ~/.config/ingest/config.jsonc.");
-      return targetFilePath;
-    }
+    await writeFile(targetFilePath, content, "utf8");
+    this.printSuccessCard(targetFilePath, "Global configuration saved successfully to ~/.config/ingest/config.jsonc.");
+    return targetFilePath;
+  }
 
   private static printSuccessCard(filePath: string, message: string): void {
     const cardLines = [

@@ -1,11 +1,14 @@
 export type Nullable<T> = T | null;
 
+export type ReportStyle = "default" | "system-centric" | "changelog" | "security" | string;
+
 export interface RepoConfig {
   path: string;
   repo_name?: Nullable<string>;
   branches: string[];
   custom_prompt?: Nullable<string>;
   custom_prompt_file?: Nullable<string>;
+  report_style?: Nullable<ReportStyle>;
   diff_mode?: boolean;
   max_diff_lines?: number;
 }
@@ -39,6 +42,7 @@ export interface RawConfig {
   agents?: ProviderConfigMap;
   default_provider?: "antigravity" | "opencode" | "gemini-cli" | "agy";
   prompt?: string;
+  report_style?: ReportStyle;
   date_format?: string;
 }
 
@@ -48,6 +52,7 @@ export interface LocalRepoConfig {
   branches?: string[];
   custom_prompt?: Nullable<string>;
   custom_prompt_file?: Nullable<string>;
+  report_style?: Nullable<ReportStyle>;
   diff_mode?: boolean;
   max_diff_lines?: number;
   output_root?: string;
@@ -70,6 +75,8 @@ export interface AppConfig {
   providers: ProviderConfigMap;
   defaultProvider: "antigravity" | "opencode" | "gemini-cli" | "agy";
   prompt: string;
+  reportStyle?: ReportStyle;
   configPath: string;
 }
+
 

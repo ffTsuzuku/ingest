@@ -45,6 +45,48 @@ describe("AI Prompt Builder", () => {
     assert.ok(prompt.includes("Key Architectural & Implementation Changes"));
   });
 
+  it("should format system-centric prompt with codebase map and causal Problem->Change->Result", () => {
+    const prompt = buildAnalysisPrompt({
+      repoName: "test-system-repo",
+      repoPath: "/path/to/system-repo",
+      branches: ["main"],
+      dateStr: "2026-08-30",
+      commits: [
+        {
+          hash: "def456789012",
+          author: "Bob Architect",
+          email: "bob@example.com",
+          timestamp: "2026-08-30T14:00:00Z",
+          subject: "feat: modularize ai provider factory",
+          body: "Separated provider logic behind unified interface",
+          branch: "main",
+          filesChanged: ["src/ai/factory.ts", "src/ai/antigravity.ts"],
+        },
+      ],
+      diffStat: {
+        filesChangedCount: 2,
+        insertions: 120,
+        deletions: 30,
+        fileStats: [{ path: "src/ai/factory.ts", insertions: 80, deletions: 10 }],
+        diffSummary: "src/ai/factory.ts | 90 ++++++++-",
+        diffPatches: "@@ -1,5 +1,10 @@\n+export class AIFactory {}",
+      },
+      basePrompt: "Default base prompt",
+      reportStyle: "system-centric",
+    });
+
+    assert.ok(prompt.includes("test-system-repo"));
+    assert.ok(prompt.includes("Bob Architect"));
+    assert.ok(prompt.includes("Codebase Map"));
+    assert.ok(prompt.includes("System Architecture & Dependency Flow"));
+    assert.ok(prompt.includes("**Problem**:"));
+    assert.ok(prompt.includes("**Change**:"));
+    assert.ok(prompt.includes("**Result**:"));
+    assert.ok(prompt.includes("Developer-Facing Behavior Changes"));
+    assert.ok(prompt.includes("Codebase Navigation"));
+    assert.ok(prompt.includes("Appendix: Commit-Level Changes"));
+  });
+
   it("should prioritize customPrompt over basePrompt", async () => {
     const prompt = await resolveRepoPrompt("Base prompt", "Custom repo prompt override");
     assert.equal(prompt, "Custom repo prompt override");

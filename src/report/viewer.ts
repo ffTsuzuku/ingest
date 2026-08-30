@@ -106,6 +106,100 @@ export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): strin
       continue;
     }
 
+    // Markdown Table detection in terminal pager
+    if (rawLine.includes("|") && i + 1 < lines.length) {
+      const nextLine = lines[i + 1] ?? "";
+      const isDelimiter =
+        nextLine.includes("|") &&
+        nextLine.includes("-") &&
+        nextLine
+          .trim()
+          .split("|")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .every((p) => /^:?-+:?$/.test(p));
+
+      if (isDelimiter) {
+        const parseRow = (str: string) => {
+          let s = str.trim();
+          if (s.startsWith("|")) s = s.slice(1);
+          if (s.endsWith("|")) s = s.slice(0, -1);
+          return s.split("|").map((c) => c.trim());
+        };
+
+        const headers = parseRow(rawLine);
+        const rows: string[][] = [];
+        i++; // skip delimiter
+
+        while (i + 1 < lines.length) {
+          const nextRow = lines[i + 1] ?? "";
+          if (nextRow.trim() === "" || (!nextRow.includes("|") && !nextRow.trim().startsWith("|"))) break;
+          if (/^(\-{3,}|\*{3,}|_{3,})$/.test(nextRow.trim())) break;
+          i++;
+          rows.push(parseRow(lines[i] ?? ""));
+        }
+
+        // Calculate column widths
+        const colWidths = headers.map((h, colIdx) => {
+          let maxLen = stripAnsi(formatInlineMarkdown(h)).length;
+          for (const row of rows) {
+            const cell = row[colIdx] ?? "";
+            const cellLen = stripAnsi(formatInlineMarkdown(cell)).length;
+            if (cellLen > maxLen) maxLen = cellLen;
+          }
+          return Math.max(4, Math.min(maxLen, 45));
+        });
+
+        // Top border: ┌──────┬──────┐
+        const topBorder = `  ${ANSI.gray}┌${colWidths.map((w) => "─".repeat(w + 2)).join("┬")}┐${ANSI.reset}`;
+        output.push("");
+        output.push(topBorder);
+
+        // Header row
+        const headerRow =
+          `  ${ANSI.gray}│${ANSI.reset} ` +
+          headers
+            .map((h, idx) => {
+              const w = colWidths[idx] ?? 10;
+              const formatted = formatInlineMarkdown(h);
+              const visLen = stripAnsi(formatted).length;
+              const pad = Math.max(0, w - visLen);
+              return `${ANSI.bold}${ANSI.brightCyan}${formatted}${ANSI.reset}${" ".repeat(pad)}`;
+            })
+            .join(` ${ANSI.gray}│${ANSI.reset} `) +
+          ` ${ANSI.gray}│${ANSI.reset}`;
+        output.push(headerRow);
+
+        // Mid border: ├──────┼──────┤
+        const midBorder = `  ${ANSI.gray}├${colWidths.map((w) => "─".repeat(w + 2)).join("┼")}┤${ANSI.reset}`;
+        output.push(midBorder);
+
+        // Data rows
+        for (const row of rows) {
+          const rowStr =
+            `  ${ANSI.gray}│${ANSI.reset} ` +
+            headers
+              .map((_, idx) => {
+                const w = colWidths[idx] ?? 10;
+                const cell = row[idx] ?? "";
+                const formatted = formatInlineMarkdown(cell);
+                const visLen = stripAnsi(formatted).length;
+                const pad = Math.max(0, w - visLen);
+                return `${formatted}${" ".repeat(pad)}`;
+              })
+              .join(` ${ANSI.gray}│${ANSI.reset} `) +
+            ` ${ANSI.gray}│${ANSI.reset}`;
+          output.push(rowStr);
+        }
+
+        // Bottom border: └──────┴──────┘
+        const bottomBorder = `  ${ANSI.gray}└${colWidths.map((w) => "─".repeat(w + 2)).join("┴")}┘${ANSI.reset}`;
+        output.push(bottomBorder);
+        output.push("");
+        continue;
+      }
+    }
+
     // Blockquotes
     if (rawLine.startsWith("> ")) {
       const content = formatInlineMarkdown(rawLine.slice(2));

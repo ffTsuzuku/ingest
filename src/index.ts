@@ -18,6 +18,7 @@ import { renderScheduleStatusBox } from "./scheduler/status.js";
 import { SkillInstaller } from "./skill/installer.js";
 import { Logger } from "./utils/logger.js";
 import { ConfigInitWizard } from "./config/init.js";
+import { IngestWebServer } from "./server/server.js";
 import { ANSI } from "./tui/ansi.js";
 
 interface ParsedArgs {
@@ -32,7 +33,11 @@ interface ParsedArgs {
   dateRange?: string;
   sinceHours?: number;
   diffMode?: boolean;
+  reportStyle?: string;
   viewFile?: string;
+  ui?: boolean;
+  port?: number;
+  noOpen?: boolean;
   init?: boolean;
   quickInit?: boolean;
   localInit?: boolean;
@@ -102,6 +107,14 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.dateRange = args[++i];
     } else if (arg === "--diff") {
       result.diffMode = true;
+    } else if ((arg === "--style" || arg === "--report-style") && i + 1 < args.length) {
+      result.reportStyle = args[++i];
+    } else if (arg === "--ui" || arg === "ui" || arg === "--serve" || arg === "serve") {
+      result.ui = true;
+    } else if (arg === "--port" && i + 1 < args.length) {
+      result.port = parseInt(args[++i] ?? "3456", 10);
+    } else if (arg === "--no-open") {
+      result.noOpen = true;
     } else if (arg === "--view" && i + 1 < args.length) {
       result.viewFile = args[++i];
     } else if (arg === "--install-skill") {
@@ -128,6 +141,7 @@ ${ANSI.bold}${ANSI.brightCyan}ingest${ANSI.reset} - AI Daily Report Generator & 
 
 ${ANSI.bold}USAGE:${ANSI.reset}
   ingest                              Launch interactive TUI
+  ingest --ui [--port <N>]            Launch web browser report dashboard
   ingest --init                       Interactive configuration setup wizard
   ingest --init --quick               Quick setup with intelligent defaults (.ingestrc)
   ingest clean [--days <N>]           Clean up / prune expired reports (default 30 days)
@@ -146,6 +160,9 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --schedule-remove            Remove automated schedules
 
 ${ANSI.bold}OPTIONS:${ANSI.reset}
+  --ui, ui, --serve           Launch web browser report explorer dashboard
+  --port <N>                  Port for web server (default: 3456)
+  --no-open                   Do not automatically open the web browser
   --init                      Launch interactive configuration wizard
   -q, --quick                 Use recommended defaults for fast initialization
   --local                     Target local repo configuration (.ingestrc)
@@ -162,6 +179,7 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   --since <date>              Start date for commit history
   --until <date>              End date for commit history
   --range <start..end>        Date range alias
+  --style <style>             Report format preset ("system-centric" | "default" | "changelog" | "security")
   --time <HH:MM>              Scheduled run time (default: 00:00)
   -h, --help                  Show this help message
 `);
@@ -236,6 +254,8 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
         repoPath,
       );
 
+      const effectiveStyle = parsed.reportStyle || effectiveRepo.report_style || config.reportStyle || "default";
+
       const analysisContext = {
         repoName,
         repoPath,
@@ -245,6 +265,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
         diffStat,
         customPrompt: activePrompt,
         basePrompt: config.prompt,
+        reportStyle: effectiveStyle,
       };
 
       let reportMarkdown = "";
@@ -375,6 +396,45 @@ export async function main(): Promise<void> {
       const expMsg = expiresAt ? ` (expires: ${expiresAt})` : "";
       Logger.success(`Crontab installed for ${time}${expMsg}`);
     }
+    return;
+  }
+
+  if (parsed.ui) {
+    const config = await ConfigManager.load(parsed.configPath);
+    if (parsed.outputRoot) {
+      config.outputRoot = resolve(parsed.outputRoot);
+    }
+    let activeRepo: string | null = null;
+    if (await isGitRepo(process.cwd())) {
+      activeRepo = await getRepoName(process.cwd());
+    }
+
+    const server = new IngestWebServer({
+      port: parsed.port || 3456,
+      outputRoot: config.outputRoot,
+      activeRepo,
+      openBrowser: !parsed.noOpen,
+    });
+
+    const info = await server.start();
+
+    console.log(`\n${ANSI.bold}${ANSI.brightCyan}⚡ Ingest Web UI Dashboard${ANSI.reset}`);
+    console.log(`  ${ANSI.green}✔ Web server running at:${ANSI.reset} ${ANSI.bold}${ANSI.underline}${info.url}${ANSI.reset}`);
+    console.log(`  ${ANSI.dim}📁 Shared report store:${ANSI.reset}  ${info.outputRoot}`);
+    if (info.activeRepo) {
+      console.log(`  ${ANSI.dim} Active repository:${ANSI.reset}    ${ANSI.cyan}${info.activeRepo}${ANSI.reset}`);
+    }
+    console.log(`\n  ${ANSI.dim}Press Ctrl+C to stop server${ANSI.reset}\n`);
+
+    await new Promise<void>((resolvePromise) => {
+      process.on("SIGINT", () => {
+        console.log(`\n${ANSI.yellow}Shutting down Ingest Web UI...${ANSI.reset}`);
+        server.stop().then(() => resolvePromise());
+      });
+      process.on("SIGTERM", () => {
+        server.stop().then(() => resolvePromise());
+      });
+    });
     return;
   }
 

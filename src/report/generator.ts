@@ -14,6 +14,7 @@ export function formatReportMarkdown(
     generatedAt,
     providerLabel: result.providerLabel,
     commitCount: context.commits.length,
+    reportStyle: context.reportStyle,
   };
 
   let content = result.content.trim();
@@ -42,6 +43,7 @@ export function generateEmptyReport(context: AnalysisContext): { markdown: strin
     generatedAt,
     providerLabel: "ingest:none",
     commitCount: 0,
+    reportStyle: context.reportStyle,
   };
 
   const markdown = `# ${context.repoName} - ${context.dateStr}

@@ -7,6 +7,7 @@
 ## 🚀 Features
 
 - 🖥️ **Interactive Zero-Dependency TUI/CLI**: Interactive terminal menus, arrow navigation, fuzzy repo selection, custom date pickers, and live AI connection testing built with pure Node.js native standard libraries.
+- 🌐 **Web Browser Dashboard & Report Explorer (`--ui`)**: Lightweight, zero-dependency HTTP server (`node:http`) serving a responsive single-page application to browse, filter, search, copy, and read reports across all repositories in your shared report store.
 - 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`).
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
 - ⏰ **Automated Schedulers (macOS LaunchAgent + Linux Cron)**: Install, manage, test, and inspect recurring daily report jobs seamlessly.
@@ -51,6 +52,11 @@ npm start
 # Launch interactive TUI menu
 ingest
 
+# Launch Web UI browser dashboard (auto-focuses current repo, browses all repos in store)
+ingest --ui
+ingest --ui --port 8080
+ingest --ui --no-open
+
 # Interactive setup wizard with guided explanations
 ingest --init
 
@@ -69,6 +75,9 @@ ingest --repo /path/to/repo --since 2026-04-01 --until 2026-04-07
 
 # Enable deep-dive code diff analysis
 ingest --repo /path/to/repo --diff
+
+# Select report style preset ("system-centric" | "default" | "changelog" | "security")
+ingest --repo /path/to/repo --style system-centric
 
 # Prune expired reports (default: older than 30 days)
 ingest clean
@@ -95,8 +104,8 @@ ingest --schedule-remove
 
 `ingest` supports a hierarchical configuration system:
 
-1. **Global Configuration** (`~/.config/ingest/config.jsonc`): Defines machine-wide defaults, AI provider settings, output directories, report expiration periods, and default repository lists.
-2. **Local Repository Configuration** (`.ingestrc` or `ingest.config.jsonc` in any repo root): Overrides target branches, custom prompts, diff limits, retention periods, or output directories specific to that repository.
+1. **Global Configuration** (`~/.config/ingest/config.jsonc`): Defines machine-wide defaults, AI provider settings, report style presets, output directories, report expiration periods, and default repository lists.
+2. **Local Repository Configuration** (`.ingestrc` or `ingest.config.jsonc` in any repo root): Overrides target branches, custom prompts, report style preset, diff limits, retention periods, or output directories specific to that repository.
 
 ### Global Configuration (`~/.config/ingest/config.jsonc`)
 
@@ -108,6 +117,7 @@ ingest --schedule-remove
       "repo_name": null, // null = auto detect from Git remote origin or repository name
       "branches": ["main", "dev"],
       "custom_prompt": null,
+      "report_style": "system-centric", // "default" | "system-centric" | "changelog" | "security"
       "diff_mode": true
     }
   ],
@@ -115,6 +125,7 @@ ingest --schedule-remove
   "retention_days": 30, // Report retention period in days (0 = keep forever)
   "error_log": "error.log",
   "default_provider": "antigravity",
+  "report_style": "system-centric",
   "provider": {
     "antigravity": {
       "dangerously_skip_permissions": true
@@ -139,6 +150,7 @@ Place `.ingestrc` in the root of your project to specify repo-specific review ru
   "repo_name": "my-service",
   "branches": ["main", "feature/next"],
   "custom_prompt": "Focus on API contract breaking changes and database schema migrations.",
+  "report_style": "system-centric",
   "diff_mode": true,
   "max_diff_lines": 300,
   "retention_days": 30

@@ -15,8 +15,8 @@
     "main"
   ],
   "diff_mode": true,
-  "max_diff_lines": 500,
-  "retention_days": 30,
+  "max_diff_lines": 1000,
+  "retention_days": 0,
   "default_provider": "antigravity",
   "prompt": "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact."
 }

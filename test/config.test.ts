@@ -131,5 +131,32 @@ describe("Local Repository Configuration", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("should parse and load report_style setting from local and global config", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-test-"));
+    try {
+      const configPath = join(tempDir, ".ingestrc");
+      await writeFile(
+        configPath,
+        `{\n  "repo_name": "test-repo",\n  "report_style": "system-centric"\n}\n`,
+        "utf8",
+      );
+
+      const loaded = await loadLocalConfig(tempDir);
+      assert.equal(loaded?.report_style, "system-centric");
+
+      const loadedConfig = await ConfigManager.load(undefined, tempDir);
+      assert.equal(loadedConfig.reportStyle, "system-centric");
+
+      const merged = await mergeRepoWithLocalConfig(
+        { path: tempDir, branches: ["main"] },
+        tempDir,
+      );
+      assert.equal(merged.report_style, "system-centric");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
+
 

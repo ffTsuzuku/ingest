@@ -103,6 +103,7 @@ export async function mergeRepoWithLocalConfig(
   const repo_name = matchingLocalRepo?.repo_name ?? localConfig.repo_name ?? repo.repo_name ?? null;
   const custom_prompt = matchingLocalRepo?.custom_prompt ?? localConfig.custom_prompt ?? repo.custom_prompt;
   const custom_prompt_file = matchingLocalRepo?.custom_prompt_file ?? localConfig.custom_prompt_file ?? repo.custom_prompt_file;
+  const report_style = matchingLocalRepo?.report_style ?? localConfig.report_style ?? repo.report_style ?? null;
   const diff_mode = matchingLocalRepo?.diff_mode ?? localConfig.diff_mode ?? repo.diff_mode;
   const max_diff_lines = matchingLocalRepo?.max_diff_lines ?? localConfig.max_diff_lines ?? repo.max_diff_lines;
 
@@ -112,6 +113,7 @@ export async function mergeRepoWithLocalConfig(
     branches,
     custom_prompt,
     custom_prompt_file,
+    report_style,
     diff_mode,
     max_diff_lines,
   };
@@ -130,12 +132,14 @@ export class ConfigManager {
 //   - diff_mode: Enable git diff deep-dive stats & line changes (+/-)
 //   - max_diff_lines: Max patch lines per commit sent to AI context (default: 200)
 //   - custom_prompt: Custom review instructions for this repo
+//   - report_style: Preset report layout ("default" | "system-centric" | "changelog" | "security")
 // • output_root: Destination directory for reports (<root>/<repo>/YYYY-MM-DD-summary.md)
 // • retention_days: Automatic report retention period in days (default: 30, 0 = keep forever)
 // • error_log: File path for recording non-fatal error traces (default: error.log)
 // • default_provider: Default AI backend ("antigravity" | "opencode" | "gemini-cli")
 // • provider: AI backend options (endpoints, model overrides, auth env vars)
 // • prompt: Default engineering analysis prompt template
+// • report_style: Global report layout ("default" | "system-centric" | "changelog" | "security")
 {
   "repos": [
     // {
@@ -144,7 +148,8 @@ export class ConfigManager {
     //   "branches": ["main"],
     //   "diff_mode": true,
     //   "max_diff_lines": 200,
-    //   "custom_prompt": null
+    //   "custom_prompt": null,
+    //   "report_style": "default"
     // }
   ],
   "output_root": "~/reports",
@@ -239,6 +244,7 @@ export class ConfigManager {
         branches,
         custom_prompt: repo.custom_prompt ?? null,
         custom_prompt_file: repo.custom_prompt_file ?? null,
+        report_style: repo.report_style ?? null,
         diff_mode: repo.diff_mode ?? true,
         max_diff_lines: repo.max_diff_lines ?? 200,
       };
@@ -265,6 +271,7 @@ export class ConfigManager {
         : typeof rawConfig.prompt === "string" && rawConfig.prompt.trim() !== ""
           ? rawConfig.prompt
           : DEFAULT_PROMPT;
+    const reportStyle = localCwdConfig?.report_style || rawConfig.report_style || "default";
 
     Logger.configure({ logFilePath: errorLogPath });
 
@@ -277,6 +284,7 @@ export class ConfigManager {
       providers,
       defaultProvider,
       prompt,
+      reportStyle,
       configPath: resolvedConfigPath,
     };
   }
@@ -292,6 +300,7 @@ export class ConfigManager {
         default_provider: config.defaultProvider,
         provider: config.providers,
         prompt: config.prompt,
+        report_style: config.reportStyle,
       },
       null,
       2,
@@ -299,4 +308,5 @@ export class ConfigManager {
     await writeFile(config.configPath, content, "utf8");
   }
 }
+
 

@@ -34,10 +34,10 @@ graph TD
 ## 2. Module Responsibilities
 
 ### 2.1. `src/config/`
-- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, and `RawConfig` (including `retention_days` expiration settings).
+- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, `RawConfig`, and `ReportStyle` (including `report_style` presets and `retention_days` expiration settings).
 - **`parser.ts`**: Pure zero-dependency JSONC parser supporting single-line `//`, block `/* ... */` comments, and trailing commas.
 - **`manager.ts`**: Implements hierarchical configuration loading. Discovers global defaults (`~/.config/ingest/config.jsonc`) and local per-repository configurations (`.ingestrc`, `ingest.config.jsonc`, `.ingest.json`), merges overrides gracefully, and supports persistent updates.
-- **`init.ts`**: Interactive and quick configuration initialization wizard (`ConfigInitWizard`). Guides developers through AI provider selection, branch discovery, prompt presets, diff limits, report storage & retention, and optional scheduler installation.
+- **`init.ts`**: Interactive and quick configuration initialization wizard (`ConfigInitWizard`). Guides developers through AI provider selection, branch discovery, prompt presets (Engineering Deep Dive, System-Centric Architecture, Changelog, Security), diff limits, report storage & retention, and optional scheduler installation.
 
 ### 2.2. `src/git/`
 - **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, lists local/remote branches, and infers canonical repository names (via Git remote origin URLs, worktree common directories, or folder paths).
@@ -46,7 +46,7 @@ graph TD
 
 ### 2.3. `src/ai/`
 - **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, and `AnalysisResult`.
-- **`prompt.ts`**: Generates high-fidelity structured prompts. Merges default system instructions with per-repo prompt overrides and diff analytics.
+- **`prompt.ts`**: Generates high-fidelity structured prompts with multi-style layout engines (`buildStandardAnalysisPrompt`, `buildSystemCentricPrompt`). Implements progressive disclosure (30-second summary, 5-minute briefing with codebase map, causal Problem->Change->Result breakdowns, behavior changes table, and commit appendix).
 - **`antigravity.ts`**: Primary provider adapter for Antigravity CLI (`agy --print --dangerously-skip-permissions`).
 - **`opencode.ts`**: Provider adapter for Opencode CLI / local OpenAI-compatible endpoints.
 - **`gemini-cli.ts`**: Provider adapter alias for backward compatibility.
@@ -54,19 +54,23 @@ graph TD
 
 ### 2.4. `src/report/`
 - **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown.
-- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports, and prunes expired reports based on configured retention window (`cleanExpiredReports`).
+- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports, lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
 - **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting and a keyboard-navigable scroll pager.
 
-### 2.5. `src/scheduler/`
+### 2.5. `src/server/`
+- **`server.ts`**: Zero-dependency HTTP server (`node:http`) powering the `--ui` Web Dashboard. Exposes REST endpoints (`/api/status`, `/api/repos`, `/api/reports`, `/api/report`) to browse reports across all repositories in the centralized `output_root`.
+- **`html.ts`**: Embedded responsive Single Page Application (HTML/CSS/JS) with live repo filtering, timeline report selector, zero-dependency Markdown renderer, diff syntax styling, copy-to-clipboard, and keyboard navigation (`/`, `c`).
+
+### 2.6. `src/scheduler/`
 - **`types.ts`**: Types for job configurations, frequency (daily, hourly, weekly, custom cron), expiration (`expiresAt`, `expireDays`), and status (`isExpired`).
 - **`cron.ts`**: Manages user crontab entries with managed block markers (`# BEGIN INGEST` / `# END INGEST`) and optional expiration tracking (`--expire-schedule`).
 - **`launchd.ts`**: Generates and manages macOS LaunchAgents (`~/Library/LaunchAgents/com.tsuzuku.ingest.plist`) with optional expiration tracking.
 - **`status.ts`**: Beautiful ANSI-styled card and box formatter for scheduler status across CLI and interactive TUI, displaying remaining days or expiration badges.
 
-### 2.6. `src/skill/`
+### 2.7. `src/skill/`
 - **`installer.ts`**: Discovers and deploys the `ingest` AI skill into `~/.gemini/config/skills/ingest/` (or workspace `.agents/skills/`) so AI coding assistants can immediately assist users.
 
-### 2.7. `src/tui/`
+### 2.8. `src/tui/`
 - **`ansi.ts`**: ANSI color codes, text formatting, line drawing, and cursor manipulation.
 - **`prompt.ts`**: Zero-dependency interactive prompts: single select (arrow keys), text input with Tab path autocompletion (`~`, relative `./`, `../`, absolute `/`, directory `/` appending), and confirmation modals with seamless `Esc` back/cancel support.
 - **`pager.ts`**: Scrollable terminal pager supporting `Up`/`Down`, `PageUp`/`PageDown`, `Home`/`End`, and `q`/`Esc` to exit or return.

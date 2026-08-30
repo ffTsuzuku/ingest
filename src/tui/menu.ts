@@ -17,6 +17,7 @@ import { LaunchdScheduler } from "../scheduler/launchd.js";
 import { renderScheduleStatusBox } from "../scheduler/status.js";
 import { SkillInstaller } from "../skill/installer.js";
 import { ConfigInitWizard } from "../config/init.js";
+import { IngestWebServer } from "../server/server.js";
 import { Logger } from "../utils/logger.js";
 
 export interface MenuContext {
@@ -55,6 +56,11 @@ export class InteractiveTUI {
           label: " View Historical Reports (Markdown Explorer)",
           value: "view",
           hint: "Browse past summaries in styled terminal pager",
+        },
+        {
+          label: "🌐 Launch Ingest Web UI Dashboard (--ui)",
+          value: "ui",
+          hint: "Open responsive web browser report explorer",
         },
         {
           label: " Scheduler Automation Wizard (Launchd / Cron)",
@@ -104,6 +110,9 @@ export class InteractiveTUI {
             break;
           case "view":
             await this.handleViewReports(ctx);
+            break;
+          case "ui":
+            await this.handleLaunchWebUI(ctx);
             break;
           case "schedule":
             await this.handleSchedulerWizard(ctx);
@@ -316,6 +325,8 @@ export class InteractiveTUI {
         repoPath,
       );
 
+      const effectiveStyle = effectiveRepo.report_style || ctx.config.reportStyle || "default";
+
       const analysisContext = {
         repoName,
         repoPath,
@@ -325,6 +336,7 @@ export class InteractiveTUI {
         diffStat,
         customPrompt: activePrompt,
         basePrompt: ctx.config.prompt,
+        reportStyle: effectiveStyle,
       };
 
       let reportMarkdown = "";
@@ -369,11 +381,14 @@ export class InteractiveTUI {
         return;
       }
 
-      const choices = reports.slice(0, 30).map((r) => ({
-        label: ` ${r.repoName} [${r.dateStr}]`,
-        value: r.filePath,
-        hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
-      }));
+      const choices = reports.slice(0, 30).map((r) => {
+        const styleSuffix = r.reportStyle ? ` (${r.reportStyle})` : "";
+        return {
+          label: ` ${r.repoName} [${r.dateStr}${styleSuffix}]`,
+          value: r.filePath,
+          hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
+        };
+      });
 
       choices.push({
         label: " Back",
@@ -501,6 +516,7 @@ export class InteractiveTUI {
       console.log(`  Current Config File: ${ANSI.cyan}${ctx.config.configPath}${ANSI.reset}`);
       console.log(`  Output Root Directory: ${ANSI.cyan}${ctx.config.outputRoot}${ANSI.reset}`);
       console.log(`  Report Expiration: ${ANSI.cyan}${ctx.config.retentionDays > 0 ? `${ctx.config.retentionDays} days` : "Disabled (keep forever)"}${ANSI.reset}`);
+      console.log(`  Report Style: ${ANSI.cyan}${ctx.config.reportStyle || "default"}${ANSI.reset}`);
       console.log(`  Default AI Provider: ${ANSI.cyan}${ctx.config.defaultProvider}${ANSI.reset}\n`);
 
       const choices = [];
@@ -510,6 +526,7 @@ export class InteractiveTUI {
       choices.push(
         { label: ` Configure Report Retention Period (${ctx.config.retentionDays > 0 ? `${ctx.config.retentionDays}d` : "Disabled"})`, value: "edit_retention" },
         { label: " Prune / Clean Expired Reports Now", value: "clean_expired" },
+        { label: `🧭 Switch Report Style Preset (${ctx.config.reportStyle || "default"})`, value: "switch_style" },
         { label: " Edit Default AI Prompt Template", value: "edit_prompt" },
         { label: " Switch Default AI Provider (Antigravity / Opencode / Gemini CLI)", value: "switch_provider" },
         { label: " Back", value: "back" },
@@ -562,6 +579,22 @@ export class InteractiveTUI {
           Logger.info(`No expired reports found in ${ctx.config.outputRoot} (> ${ctx.config.retentionDays} days old).`);
         } else {
           Logger.success(`Cleaned up ${deleted.length} expired report(s).`);
+        }
+      } else if (action === "switch_style") {
+        const newStyle = await promptSelect<string>({
+          message: "Select report style preset:",
+          choices: [
+            { label: "🧭 System-Centric Architecture (Codebase maps, causal Problem->Change->Result, behavior tables)", value: "system-centric" },
+            { label: "🏗️  Engineering Deep Dive (Default structure)", value: "default" },
+            { label: "📝 Release Changelog (Features, fixes, breaking changes)", value: "changelog" },
+            { label: "🛡️  Security & Risk Review (Sensitive logic, dependencies)", value: "security" },
+            { label: " Back", value: "back" },
+          ],
+        });
+        if (newStyle && newStyle !== "back") {
+          ctx.config.reportStyle = newStyle;
+          await ConfigManager.save(ctx.config);
+          Logger.success(`Report style updated to "${newStyle}".`);
         }
       } else if (action === "edit_prompt") {
         const newPrompt = await promptText({
@@ -625,5 +658,33 @@ export class InteractiveTUI {
     } else {
       Logger.success(`Provider "${provider.name}" CLI is available and reachable.`);
     }
+  }
+
+  private static async handleLaunchWebUI(ctx: MenuContext): Promise<void> {
+    console.log(`\n${ANSI.bold}${ANSI.brightCyan}=== Launch Ingest Web UI Dashboard ===${ANSI.reset}\n`);
+
+    let activeRepo: string | null = null;
+    if (ctx.isCurrentDirRepo && ctx.currentRepoPath) {
+      activeRepo = await getRepoName(ctx.currentRepoPath);
+    }
+
+    const server = new IngestWebServer({
+      port: 3456,
+      outputRoot: ctx.config.outputRoot,
+      activeRepo,
+      openBrowser: true,
+    });
+
+    const info = await server.start();
+    console.log(`  ${ANSI.green}✔ Ingest Web UI running at:${ANSI.reset} ${ANSI.bold}${ANSI.underline}${info.url}${ANSI.reset}`);
+    console.log(`  ${ANSI.dim}📁 Shared report store:${ANSI.reset}    ${info.outputRoot}`);
+    if (info.activeRepo) {
+      console.log(`  ${ANSI.dim} Active repository:${ANSI.reset}      ${ANSI.cyan}${info.activeRepo}${ANSI.reset}`);
+    }
+    console.log(`\n  ${ANSI.dim}Browser window opened. Press <Enter> to return to main menu.${ANSI.reset}\n`);
+
+    await promptText({ message: "Press <Enter> to stop web server and return to menu..." });
+    await server.stop();
+    console.log(`  ${ANSI.yellow}Web server stopped.${ANSI.reset}\n`);
   }
 }

@@ -32,18 +32,28 @@ description: >-
      ingest --repo /path/to/repo --date 2026-04-01..2026-04-07
      ingest --repo /path/to/repo --since 2026-04-01 --until 2026-04-07
      ```
-   - Enable deep-dive code diff analysis:
+   - Enable deep-dive code diff analysis and select report styles:
      ```bash
      ingest --repo /path/to/repo --diff
+     ingest --repo /path/to/repo --style system-centric
      ```
 
-3. **Report Explorer & Terminal Markdown Viewer**:
+3. **Web Browser Report Explorer & Dashboard**:
+   - Serve an interactive web dashboard across all repositories in the centralized report store:
+     ```bash
+     ingest --ui
+     ingest --ui --port 3456
+     ingest --ui --no-open
+     ```
+   - Automatically pre-selects current repo if run inside a Git repository while providing a sidebar switcher to browse reports for all other tracked repositories.
+
+4. **Terminal Markdown Viewer & Pager**:
    - View generated markdown reports directly in the terminal with ANSI styling:
      ```bash
      ingest --view /path/to/report.md
      ```
 
-4. **Report Expiration & Maintenance**:
+5. **Report Expiration & Maintenance**:
    - Prune expired reports based on configured retention period (default: 30 days):
      ```bash
      ingest clean
@@ -51,7 +61,7 @@ description: >-
      ingest --clean
      ```
 
-5. **Automated Scheduling (macOS launchd & Linux Cron)**:
+6. **Automated Scheduling (macOS launchd & Linux Cron)**:
    - Install or view automated daily schedule (with optional automatic expiration):
      ```bash
      ingest --schedule-install --time 00:00
@@ -61,7 +71,7 @@ description: >-
      ingest --schedule-remove
      ```
 
-6. **Global Skill Installer**:
+7. **Global Skill Installer**:
    - Install or update this AI skill into the user's global agent directory:
      ```bash
      ingest --install-skill
@@ -79,6 +89,7 @@ description: >-
       "repo_name": null, // null = auto detect from Git remote origin or repository name
       "branches": ["main", "dev"],
       "custom_prompt": null,
+      "report_style": "system-centric", // "default" | "system-centric" | "changelog" | "security"
       "diff_mode": true
     }
   ],
@@ -86,6 +97,7 @@ description: >-
   "retention_days": 30, // Report retention period in days (0 = keep forever)
   "error_log": "error.log",
   "default_provider": "antigravity",
+  "report_style": "system-centric",
   "provider": {
     "antigravity": {
       "dangerously_skip_permissions": true
@@ -106,6 +118,7 @@ description: >-
   "repo_name": "custom-name",
   "branches": ["main", "feature/v2"],
   "custom_prompt": "Focus on API breaking changes and database migrations.",
+  "report_style": "system-centric",
   "diff_mode": true,
   "max_diff_lines": 300,
   "retention_days": 30

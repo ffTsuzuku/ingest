@@ -1,5 +1,3 @@
-import type { CommitRecord, DiffStat } from "../git/types.js";
-
 export interface ReportMeta {
   repoName: string;
   repoPath: string;
@@ -8,6 +6,7 @@ export interface ReportMeta {
   generatedAt: string;
   providerLabel: string;
   commitCount: number;
+  reportStyle?: string;
 }
 
 export interface GeneratedReport {
@@ -23,4 +22,6 @@ export interface ReportSummary {
   dateStr: string;
   sizeBytes: number;
   modifiedAt: Date;
+  reportStyle?: string;
 }
+
