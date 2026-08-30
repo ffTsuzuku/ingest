@@ -47,7 +47,15 @@ export class CronScheduler {
     const workingDir = resolve(process.cwd());
     const entrypoint = this.resolveEntrypoint();
     const configArg = config.configPath ? ` "${config.configPath}"` : "";
-    const commandLine = `cd "${workingDir}" && "${process.execPath}" "${entrypoint}"${configArg} >> /tmp/ingest-cron.log 2>&1`;
+
+    let expiresAt = config.expiresAt;
+    if (!expiresAt && typeof config.expireDays === "number" && config.expireDays > 0) {
+      const targetDate = new Date(Date.now() + config.expireDays * 86400000);
+      expiresAt = targetDate.toISOString().slice(0, 10);
+    }
+    const expireArg = expiresAt ? ` --expire-schedule "${expiresAt}"` : "";
+
+    const commandLine = `cd "${workingDir}" && "${process.execPath}" "${entrypoint}"${configArg}${expireArg} >> /tmp/ingest-cron.log 2>&1`;
 
     const managedBlock = `${CRON_START_TAG}\n${cronExpr} ${commandLine}\n${CRON_END_TAG}`;
 
@@ -97,12 +105,23 @@ export class CronScheduler {
       const parts = line.split(/\s+/);
       const cronExpr = parts.length >= 5 ? parts.slice(0, 5).join(" ") : line;
       const command = parts.length >= 6 ? parts.slice(5).join(" ") : undefined;
+
+      let expiresAt: string | undefined;
+      let isExpired = false;
+      const expMatch = line.match(/--expire-schedule\s+"?(\d{4}-\d{2}-\d{2})"?/);
+      if (expMatch && expMatch[1]) {
+        expiresAt = expMatch[1];
+        isExpired = new Date(`${expiresAt}T23:59:59.999Z`).getTime() < Date.now();
+      }
+
       return {
         active: true,
         type: "cron",
         details: `Active Cron Job: ${line}`,
         cronExpr,
         command,
+        expiresAt,
+        isExpired,
         isLegacy: false,
         logPath: "/tmp/ingest-cron.log",
       };

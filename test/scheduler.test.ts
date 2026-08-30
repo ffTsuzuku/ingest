@@ -24,6 +24,16 @@ describe("Launchd Scheduler", () => {
     assert.ok(plist.includes("<integer>4</integer>"));
     assert.ok(plist.includes("<integer>15</integer>"));
   });
+
+  it("should include --expire-schedule in launchd plist when expiresAt is specified", () => {
+    const plist = LaunchdScheduler.generatePlist({
+      frequency: "daily",
+      time: "00:00",
+      expiresAt: "2026-09-30",
+    });
+    assert.ok(plist.includes("<string>--expire-schedule</string>"));
+    assert.ok(plist.includes("<string>2026-09-30</string>"));
+  });
 });
 
 describe("Scheduler Status Formatting", () => {
@@ -35,6 +45,8 @@ describe("Scheduler Status Formatting", () => {
         details: "Loaded",
         label: "com.tsuzuku.ingest",
         scheduleTime: "Daily at 00:00",
+        expiresAt: "2026-09-30",
+        isExpired: false,
         plistPath: "/Users/test/Library/LaunchAgents/com.tsuzuku.ingest.plist",
         logPath: "/tmp/ingest-launchd.log",
         isLegacy: false,
@@ -50,7 +62,28 @@ describe("Scheduler Status Formatting", () => {
     assert.ok(fullText.includes("macOS LaunchAgent"));
     assert.ok(fullText.includes("ACTIVE"));
     assert.ok(fullText.includes("Daily at 00:00"));
+    assert.ok(fullText.includes("Expires:"));
+    assert.ok(fullText.includes("2026-09-30"));
     assert.ok(fullText.includes("Crontab"));
     assert.ok(fullText.includes("INACTIVE"));
+  });
+
+  it("should display expired badge when schedule has passed expiration date", () => {
+    const lines = formatScheduleLines(
+      null,
+      {
+        active: true,
+        type: "cron",
+        details: "Active",
+        cronExpr: "0 0 * * *",
+        expiresAt: "2026-01-01",
+        isExpired: true,
+        logPath: "/tmp/ingest-cron.log",
+      },
+    );
+
+    const fullText = lines.join("\n");
+    assert.ok(fullText.includes("EXPIRED"));
+    assert.ok(fullText.includes("2026-01-01"));
   });
 });

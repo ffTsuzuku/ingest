@@ -83,6 +83,8 @@ ingest --install-skill
 
 # Scheduler automation
 ingest --schedule-install --time 00:00
+ingest --schedule-install --time 00:00 --expires 2026-09-30
+ingest --schedule-install --time 00:00 --expire-days 14
 ingest --schedule-status
 ingest --schedule-remove
 ```

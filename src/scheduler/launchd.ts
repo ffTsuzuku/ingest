@@ -38,6 +38,14 @@ export class LaunchdScheduler {
     const minute = parseInt(minStr, 10);
 
     const configArg = config.configPath ? `\n    <string>${config.configPath}</string>` : "";
+
+    let expiresAt = config.expiresAt;
+    if (!expiresAt && typeof config.expireDays === "number" && config.expireDays > 0) {
+      const targetDate = new Date(Date.now() + config.expireDays * 86400000);
+      expiresAt = targetDate.toISOString().slice(0, 10);
+    }
+    const expireArg = expiresAt ? `\n    <string>--expire-schedule</string>\n    <string>${expiresAt}</string>` : "";
+
     const nodePath = process.execPath;
     const envPath = process.env.PATH || "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
@@ -55,7 +63,7 @@ export class LaunchdScheduler {
   <key>ProgramArguments</key>
   <array>
     <string>${nodePath}</string>
-    <string>${entrypoint}</string>${configArg}
+    <string>${entrypoint}</string>${configArg}${expireArg}
   </array>
   <key>WorkingDirectory</key>
   <string>${workingDir}</string>
@@ -134,12 +142,19 @@ export class LaunchdScheduler {
       const res = await executeCommand("launchctl", ["list", PLIST_LABEL]);
       const active = res.exitCode === 0;
       let scheduleTime: string | undefined;
+      let expiresAt: string | undefined;
+      let isExpired = false;
       try {
         const content = await readFile(PLIST_PATH, "utf8");
         const hourMatch = content.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
         const minMatch = content.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
         if (hourMatch && minMatch) {
           scheduleTime = `Daily at ${hourMatch[1].padStart(2, "0")}:${minMatch[1].padStart(2, "0")}`;
+        }
+        const expMatch = content.match(/<string>--expire-schedule<\/string>\s*<string>(\d{4}-\d{2}-\d{2})<\/string>/);
+        if (expMatch && expMatch[1]) {
+          expiresAt = expMatch[1];
+          isExpired = new Date(`${expiresAt}T23:59:59.999Z`).getTime() < Date.now();
         }
       } catch {
         // Ignored
@@ -153,6 +168,8 @@ export class LaunchdScheduler {
         plistPath: PLIST_PATH,
         isLegacy: false,
         scheduleTime,
+        expiresAt,
+        isExpired,
         logPath: "/tmp/ingest-launchd.log",
         errorLogPath: "/tmp/ingest-launchd-error.log",
       };

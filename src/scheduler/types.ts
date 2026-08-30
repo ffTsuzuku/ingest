@@ -6,6 +6,8 @@ export interface ScheduleConfig {
   cronExpression?: string; // e.g. "0 0 * * *"
   configPath?: string;
   outputRoot?: string;
+  expiresAt?: string; // YYYY-MM-DD expiration date
+  expireDays?: number; // Expiration duration in days from install
 }
 
 export interface ScheduleStatus {
@@ -19,6 +21,8 @@ export interface ScheduleStatus {
   scheduleTime?: string;
   cronExpr?: string;
   command?: string;
+  expiresAt?: string;
+  isExpired?: boolean;
   logPath?: string;
   errorLogPath?: string;
 }

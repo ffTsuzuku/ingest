@@ -42,6 +42,9 @@ interface ParsedArgs {
   scheduleStatus?: boolean;
   scheduleRemove?: boolean;
   scheduleTime?: string;
+  expiresAt?: string;
+  expireDays?: number;
+  expireSchedule?: string;
   interactive?: boolean;
   help?: boolean;
 }
@@ -77,6 +80,12 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.cleanExpired = true;
     } else if ((arg === "--retention-days" || arg === "--days" || arg === "-d") && i + 1 < args.length) {
       result.retentionDays = parseInt(args[++i] ?? "30", 10);
+    } else if (arg === "--expire-schedule" && i + 1 < args.length) {
+      result.expireSchedule = args[++i];
+    } else if ((arg === "--expires" || arg === "--expire-at") && i + 1 < args.length) {
+      result.expiresAt = args[++i];
+    } else if (arg === "--expire-days" && i + 1 < args.length) {
+      result.expireDays = parseInt(args[++i] ?? "0", 10);
     } else if (arg === "--config" && i + 1 < args.length) {
       result.configPath = args[++i];
     } else if (arg === "--output-root" && i + 1 < args.length) {
@@ -132,6 +141,7 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --view <report.md>           View markdown report in terminal pager
   ingest --install-skill              Deploy AI skill to ~/.gemini/config/skills/ingest/
   ingest --schedule-install           Install automated daily scheduler (launchd / cron)
+  ingest --schedule-install --expires <YYYY-MM-DD>  Install scheduler with automatic expiration date
   ingest --schedule-status            Check current scheduler status
   ingest --schedule-remove            Remove automated schedules
 
@@ -146,6 +156,8 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   --config <path>             Path to custom config.jsonc
   --output-root <path>        Override report output directory
   --retention-days <days>     Report expiration retention period in days (default: 30, 0 = keep forever)
+  --expires <YYYY-MM-DD>      Set expiration date for automated scheduler
+  --expire-days <days>        Set expiration duration in days for automated scheduler
   --date <date|range>         Specific date (YYYY-MM-DD) or range (YYYY-MM-DD..YYYY-MM-DD)
   --since <date>              Start date for commit history
   --until <date>              End date for commit history
@@ -272,6 +284,19 @@ export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const parsed = parseCliArgs(args);
 
+  // Self-expiration check for scheduled execution
+  if (parsed.expireSchedule) {
+    const expTimestamp = new Date(`${parsed.expireSchedule}T23:59:59.999Z`).getTime();
+    if (!isNaN(expTimestamp) && Date.now() > expTimestamp) {
+      await CronScheduler.uninstall();
+      if (LaunchdScheduler.isMacOS()) {
+        await LaunchdScheduler.uninstall();
+      }
+      Logger.info(`Automated schedule expired on ${parsed.expireSchedule}. Schedule has been automatically uninstalled.`);
+      return;
+    }
+  }
+
   if (parsed.help) {
     printHelp();
     return;
@@ -328,12 +353,27 @@ export async function main(): Promise<void> {
 
   if (parsed.scheduleInstall) {
     const time = parsed.scheduleTime || "00:00";
+    let expiresAt = parsed.expiresAt;
+    if (!expiresAt && parsed.expireDays && parsed.expireDays > 0) {
+      const target = new Date(Date.now() + parsed.expireDays * 86400000);
+      expiresAt = target.toISOString().slice(0, 10);
+    }
+    const schedConfig = {
+      frequency: "daily" as const,
+      time,
+      configPath: parsed.configPath,
+      expiresAt,
+      expireDays: parsed.expireDays,
+    };
+
     if (LaunchdScheduler.isMacOS()) {
-      await LaunchdScheduler.install({ frequency: "daily", time, configPath: parsed.configPath });
-      Logger.success(`macOS LaunchAgent installed for ${time}`);
+      await LaunchdScheduler.install(schedConfig);
+      const expMsg = expiresAt ? ` (expires: ${expiresAt})` : "";
+      Logger.success(`macOS LaunchAgent installed for ${time}${expMsg}`);
     } else {
-      await CronScheduler.install({ frequency: "daily", time, configPath: parsed.configPath });
-      Logger.success(`Crontab installed for ${time}`);
+      await CronScheduler.install(schedConfig);
+      const expMsg = expiresAt ? ` (expires: ${expiresAt})` : "";
+      Logger.success(`Crontab installed for ${time}${expMsg}`);
     }
     return;
   }

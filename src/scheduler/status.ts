@@ -28,6 +28,14 @@ export function formatScheduleLines(launchdStatus: ScheduleStatus | null, cronSt
       if (launchdStatus.scheduleTime) {
         lines.push(`  ${ANSI.dim}Schedule:${ANSI.reset}  ${ANSI.brightGreen}${launchdStatus.scheduleTime}${ANSI.reset}`);
       }
+      if (launchdStatus.expiresAt) {
+        const isExp = launchdStatus.isExpired;
+        const daysLeft = Math.ceil((new Date(`${launchdStatus.expiresAt}T23:59:59.999Z`).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        const expStr = isExp
+          ? `${ANSI.red}${ANSI.bold}EXPIRED (${launchdStatus.expiresAt})${ANSI.reset}`
+          : `${ANSI.cyan}${launchdStatus.expiresAt}${ANSI.reset} ${ANSI.dim}(${daysLeft} day${daysLeft === 1 ? "" : "s"} remaining)${ANSI.reset}`;
+        lines.push(`  ${ANSI.dim}Expires:${ANSI.reset}   ${expStr}`);
+      }
       if (launchdStatus.plistPath) {
         lines.push(`  ${ANSI.dim}Plist:${ANSI.reset}     ${ANSI.gray}${shortenPath(launchdStatus.plistPath)}${ANSI.reset}`);
       }
@@ -49,6 +57,14 @@ export function formatScheduleLines(launchdStatus: ScheduleStatus | null, cronSt
     const legacyTag = cronStatus.isLegacy ? ` ${ANSI.yellow}(Legacy)${ANSI.reset}` : "";
     if (cronStatus.cronExpr) {
       lines.push(`  ${ANSI.dim}Schedule:${ANSI.reset}  ${ANSI.brightGreen}${cronStatus.cronExpr}${ANSI.reset}${legacyTag}`);
+    }
+    if (cronStatus.expiresAt) {
+      const isExp = cronStatus.isExpired;
+      const daysLeft = Math.ceil((new Date(`${cronStatus.expiresAt}T23:59:59.999Z`).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+      const expStr = isExp
+        ? `${ANSI.red}${ANSI.bold}EXPIRED (${cronStatus.expiresAt})${ANSI.reset}`
+        : `${ANSI.cyan}${cronStatus.expiresAt}${ANSI.reset} ${ANSI.dim}(${daysLeft} day${daysLeft === 1 ? "" : "s"} remaining)${ANSI.reset}`;
+      lines.push(`  ${ANSI.dim}Expires:${ANSI.reset}   ${expStr}`);
     }
     if (cronStatus.command) {
       lines.push(`  ${ANSI.dim}Command:${ANSI.reset}   ${ANSI.gray}${shortenPath(cronStatus.command)}${ANSI.reset}`);

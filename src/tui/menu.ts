@@ -444,18 +444,50 @@ export class InteractiveTUI {
 
         if (!timeInput) continue;
 
+        const expireChoice = await promptSelect({
+          message: "Set automated schedule expiration period?",
+          choices: [
+            { label: "♾️  Permanent / Indefinite (No expiration)", value: "none" },
+            { label: "⏱️  7 Days (1-week sprint / trial)", value: "7d" },
+            { label: "⏱️  14 Days (2-week sprint cycle)", value: "14d" },
+            { label: "⏱️  30 Days (1-month period)", value: "30d" },
+            { label: "  Custom Expiration Date (YYYY-MM-DD)", value: "custom" },
+            { label: "  Back", value: "back" },
+          ],
+        });
+
+        if (!expireChoice || expireChoice === "back") continue;
+
+        let expiresAt: string | undefined;
+        if (expireChoice === "7d") {
+          expiresAt = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+        } else if (expireChoice === "14d") {
+          expiresAt = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+        } else if (expireChoice === "30d") {
+          expiresAt = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+        } else if (expireChoice === "custom") {
+          const defaultCustom = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+          const customDate = await promptText({
+            message: "Enter expiration date (YYYY-MM-DD):",
+            defaultValue: defaultCustom,
+          });
+          if (customDate) expiresAt = customDate.trim();
+        }
+
         const schedConfig = {
           frequency: "daily" as const,
           time: timeInput,
           configPath: ctx.config.configPath,
+          expiresAt,
         };
 
+        const expDesc = expiresAt ? ` (expires: ${expiresAt})` : "";
         if (targetEngine === "launchd") {
           await LaunchdScheduler.install(schedConfig);
-          Logger.success(`macOS LaunchAgent installed to run daily at ${timeInput}.`);
+          Logger.success(`macOS LaunchAgent installed to run daily at ${timeInput}${expDesc}.`);
         } else {
           await CronScheduler.install(schedConfig);
-          Logger.success(`Crontab job installed to run daily at ${timeInput}.`);
+          Logger.success(`Crontab job installed to run daily at ${timeInput}${expDesc}.`);
         }
         return;
       }

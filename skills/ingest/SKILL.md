@@ -52,9 +52,11 @@ description: >-
      ```
 
 5. **Automated Scheduling (macOS launchd & Linux Cron)**:
-   - Install or view automated daily schedule:
+   - Install or view automated daily schedule (with optional automatic expiration):
      ```bash
      ingest --schedule-install --time 00:00
+     ingest --schedule-install --time 00:00 --expires 2026-09-30
+     ingest --schedule-install --time 00:00 --expire-days 14
      ingest --schedule-status
      ingest --schedule-remove
      ```
