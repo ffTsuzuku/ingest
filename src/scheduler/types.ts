@@ -13,4 +13,12 @@ export interface ScheduleStatus {
   type: "launchd" | "cron" | "none";
   details: string;
   nextRun?: string;
+  label?: string;
+  plistPath?: string;
+  isLegacy?: boolean;
+  scheduleTime?: string;
+  cronExpr?: string;
+  command?: string;
+  logPath?: string;
+  errorLogPath?: string;
 }

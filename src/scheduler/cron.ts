@@ -93,26 +93,40 @@ export class CronScheduler {
     const crontab = await this.getCrontab();
     if (crontab.includes(CRON_START_TAG)) {
       const match = crontab.match(new RegExp(`${CRON_START_TAG}\\n([\\s\\S]*?)\\n${CRON_END_TAG}`));
-      const line = match?.[1] || "";
+      const line = (match?.[1] || "").trim();
+      const parts = line.split(/\s+/);
+      const cronExpr = parts.length >= 5 ? parts.slice(0, 5).join(" ") : line;
+      const command = parts.length >= 6 ? parts.slice(5).join(" ") : undefined;
       return {
         active: true,
         type: "cron",
         details: `Active Cron Job: ${line}`,
+        cronExpr,
+        command,
+        isLegacy: false,
+        logPath: "/tmp/ingest-cron.log",
       };
     }
     if (crontab.includes(LEGACY_CRON_START_TAG)) {
       const match = crontab.match(new RegExp(`${LEGACY_CRON_START_TAG}\\n([\\s\\S]*?)\\n${LEGACY_CRON_END_TAG}`));
-      const line = match?.[1] || "";
+      const line = (match?.[1] || "").trim();
+      const parts = line.split(/\s+/);
+      const cronExpr = parts.length >= 5 ? parts.slice(0, 5).join(" ") : line;
+      const command = parts.length >= 6 ? parts.slice(5).join(" ") : undefined;
       return {
         active: true,
         type: "cron",
         details: `Active Legacy Cron Job: ${line}`,
+        cronExpr,
+        command,
+        isLegacy: true,
+        logPath: "/tmp/ingest-cron.log",
       };
     }
     return {
       active: false,
       type: "none",
-      details: "No active cron job found for ingest.",
+      details: "No active cron job configured.",
     };
   }
 }

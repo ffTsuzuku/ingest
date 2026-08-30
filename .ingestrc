@@ -1,0 +1,20 @@
+// Ingest Local Repository Configuration (.ingestrc)
+// Documentation & guide: https://github.com/tsuzuku/ingest
+//
+// SETTINGS REFERENCE:
+// • repo_name: Custom name in report headers (null = auto-detect)
+// • branches: Target Git branches to analyze for commit activity
+// • diff_mode: When true, extracts git diff stats & line changes (+/-)
+// • max_diff_lines: Max patch lines per commit sent to AI context
+// • default_provider: "antigravity" | "opencode" | "gemini-cli"
+// • prompt: System prompt instructions guiding AI summary generation
+{
+  "repo_name": "github-ingest",
+  "branches": [
+    "main"
+  ],
+  "diff_mode": true,
+  "max_diff_lines": 500,
+  "default_provider": "antigravity",
+  "prompt": "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact."
+}

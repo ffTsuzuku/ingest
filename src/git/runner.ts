@@ -31,6 +31,35 @@ export async function getGitBranches(repoPath: string): Promise<string[]> {
   }
 }
 
+export async function getAllGitBranches(repoPath: string): Promise<string[]> {
+  try {
+    const res = await runGit(["branch", "-a", "--format=%(refname:short)"], repoPath);
+    if (res.exitCode !== 0) return await getGitBranches(repoPath);
+
+    const set = new Set<string>();
+    for (const raw of res.stdout.split("\n")) {
+      const b = raw.trim();
+      if (!b || b.includes("/HEAD") || b === "HEAD") continue;
+      const clean = b.startsWith("origin/") ? b.slice(7) : b;
+      if (clean && !clean.includes("HEAD")) {
+        set.add(clean);
+      }
+    }
+
+    const current = await getCurrentBranch(repoPath);
+    const list = Array.from(set);
+    return list.sort((a, b) => {
+      if (a === current) return -1;
+      if (b === current) return 1;
+      if (a === "main" || a === "master") return -1;
+      if (b === "main" || b === "master") return 1;
+      return a.localeCompare(b);
+    });
+  } catch {
+    return await getGitBranches(repoPath);
+  }
+}
+
 export async function getCurrentBranch(repoPath: string): Promise<string> {
   try {
     const res = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], repoPath);

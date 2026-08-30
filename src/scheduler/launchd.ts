@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { access, mkdir, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -126,27 +126,63 @@ export class LaunchdScheduler {
 
   public static async getStatus(): Promise<ScheduleStatus> {
     if (!this.isMacOS()) {
-      return { active: false, type: "none", details: "launchd not supported on this OS" };
+      return { active: false, type: "none", details: "Launchd is not supported on this OS." };
     }
 
     try {
       await access(PLIST_PATH);
       const res = await executeCommand("launchctl", ["list", PLIST_LABEL]);
       const active = res.exitCode === 0;
+      let scheduleTime: string | undefined;
+      try {
+        const content = await readFile(PLIST_PATH, "utf8");
+        const hourMatch = content.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
+        const minMatch = content.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
+        if (hourMatch && minMatch) {
+          scheduleTime = `Daily at ${hourMatch[1].padStart(2, "0")}:${minMatch[1].padStart(2, "0")}`;
+        }
+      } catch {
+        // Ignored
+      }
+
       return {
         active,
         type: "launchd",
-        details: active ? `LaunchAgent loaded (${PLIST_LABEL}) at ${PLIST_PATH}` : `Plist file exists at ${PLIST_PATH} but not currently loaded.`,
+        details: active ? `LaunchAgent loaded (${PLIST_LABEL})` : `Plist file exists at ${PLIST_PATH} but not currently loaded.`,
+        label: PLIST_LABEL,
+        plistPath: PLIST_PATH,
+        isLegacy: false,
+        scheduleTime,
+        logPath: "/tmp/ingest-launchd.log",
+        errorLogPath: "/tmp/ingest-launchd-error.log",
       };
     } catch {
       try {
         await access(LEGACY_PLIST_PATH);
         const res = await executeCommand("launchctl", ["list", LEGACY_PLIST_LABEL]);
         const active = res.exitCode === 0;
+        let scheduleTime: string | undefined;
+        try {
+          const content = await readFile(LEGACY_PLIST_PATH, "utf8");
+          const hourMatch = content.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
+          const minMatch = content.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
+          if (hourMatch && minMatch) {
+            scheduleTime = `Daily at ${hourMatch[1].padStart(2, "0")}:${minMatch[1].padStart(2, "0")}`;
+          }
+        } catch {
+          // Ignored
+        }
+
         return {
           active,
           type: "launchd",
-          details: active ? `Legacy LaunchAgent loaded (${LEGACY_PLIST_LABEL}) at ${LEGACY_PLIST_PATH}` : `Legacy plist file exists at ${LEGACY_PLIST_PATH} but not currently loaded.`,
+          details: active ? `Legacy LaunchAgent loaded (${LEGACY_PLIST_LABEL})` : `Legacy plist file exists at ${LEGACY_PLIST_PATH} but not currently loaded.`,
+          label: LEGACY_PLIST_LABEL,
+          plistPath: LEGACY_PLIST_PATH,
+          isLegacy: true,
+          scheduleTime,
+          logPath: "/tmp/ingest-launchd.log",
+          errorLogPath: "/tmp/ingest-launchd-error.log",
         };
       } catch {
         return {

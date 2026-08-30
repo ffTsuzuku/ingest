@@ -34,9 +34,10 @@ graph TD
 ## 2. Module Responsibilities
 
 ### 2.1. `src/config/`
-- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `ProviderConfig`, and `RawConfig`.
+- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, and `RawConfig`.
 - **`parser.ts`**: Pure zero-dependency JSONC parser supporting single-line `//`, block `/* ... */` comments, and trailing commas.
-- **`manager.ts`**: Loads configs from custom paths or `~/.config/ingest/config.jsonc`, initializes defaults if missing, validates fields, and supports persistent updates.
+- **`manager.ts`**: Implements hierarchical configuration loading. Discovers global defaults (`~/.config/ingest/config.jsonc`) and local per-repository configurations (`.ingestrc`, `ingest.config.jsonc`, `.ingest.json`), merges overrides gracefully, and supports persistent updates.
+- **`init.ts`**: Interactive and quick configuration initialization wizard (`ConfigInitWizard`). Guides developers through AI provider selection, branch discovery, prompt presets, diff limits, and optional scheduler installation.
 
 ### 2.2. `src/git/`
 - **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, lists local/remote branches, and infers canonical repository names (via Git remote origin URLs, worktree common directories, or folder paths).
@@ -60,6 +61,7 @@ graph TD
 - **`types.ts`**: Types for job configurations, frequency (daily, hourly, weekly, custom cron), and status.
 - **`cron.ts`**: Manages user crontab entries with managed block markers (`# BEGIN INGEST` / `# END INGEST`).
 - **`launchd.ts`**: Generates and manages macOS LaunchAgents (`~/Library/LaunchAgents/com.tsuzuku.ingest.plist`).
+- **`status.ts`**: Beautiful ANSI-styled card and box formatter for scheduler status across CLI and interactive TUI.
 
 ### 2.6. `src/skill/`
 - **`installer.ts`**: Discovers and deploys the `ingest` AI skill into `~/.gemini/config/skills/ingest/` (or workspace `.agents/skills/`) so AI coding assistants can immediately assist users.

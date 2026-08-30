@@ -50,6 +50,12 @@ npm start
 # Launch interactive TUI menu
 ingest
 
+# Interactive setup wizard with guided explanations
+ingest --init
+
+# Quick setup with smart defaults (.ingestrc in project root)
+ingest --init --quick
+
 # Run headless report generation for all configured repos
 ingest ~/.config/ingest/config.jsonc
 
@@ -77,7 +83,14 @@ ingest --schedule-remove
 
 ---
 
-## ⚙️ Configuration (`~/.config/ingest/config.jsonc`)
+## ⚙️ Configuration
+
+`ingest` supports a hierarchical configuration system:
+
+1. **Global Configuration** (`~/.config/ingest/config.jsonc`): Defines machine-wide defaults, AI provider settings, output directories, and default repository lists.
+2. **Local Repository Configuration** (`.ingestrc` or `ingest.config.jsonc` in any repo root): Overrides target branches, custom prompts, diff limits, or output directories specific to that repository.
+
+### Global Configuration (`~/.config/ingest/config.jsonc`)
 
 ```jsonc
 {
@@ -104,6 +117,21 @@ ingest --schedule-remove
     }
   },
   "prompt": "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact."
+}
+```
+
+### Local Repository Configuration (`.ingestrc` or `ingest.config.jsonc`)
+
+Place `.ingestrc` in the root of your project to specify repo-specific review rules:
+
+```jsonc
+// .ingestrc in project root
+{
+  "repo_name": "my-service",
+  "branches": ["main", "feature/next"],
+  "custom_prompt": "Focus on API contract breaking changes and database schema migrations.",
+  "diff_mode": true,
+  "max_diff_lines": 300
 }
 ```
 

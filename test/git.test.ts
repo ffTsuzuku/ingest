@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildGitDateArgs, resolveDateFilter } from "../src/git/log.js";
-import { isGitRepo, getGitBranches, getRepoName, extractRepoNameFromUrl } from "../src/git/runner.js";
+import { isGitRepo, getGitBranches, getAllGitBranches, getRepoName, extractRepoNameFromUrl } from "../src/git/runner.js";
 import { fetchDiffStat, fetchDiffPatches } from "../src/git/diff.js";
 
 describe("Git Log Helpers", () => {
@@ -62,6 +62,12 @@ describe("Git Runner & Diff", () => {
     const branches = await getGitBranches(process.cwd());
     assert.ok(Array.isArray(branches));
     assert.ok(branches.length > 0);
+  });
+
+  it("should list all git branches including sorted main/active branches", async () => {
+    const allBranches = await getAllGitBranches(process.cwd());
+    assert.ok(Array.isArray(allBranches));
+    assert.ok(allBranches.length > 0);
   });
 
   it("should fetch diffstat and patches from repository", async () => {

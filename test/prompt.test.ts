@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildAnalysisPrompt, resolveRepoPrompt } from "../src/ai/prompt.js";
 import { AIFactory } from "../src/ai/factory.js";
-import { promptSelect, promptConfirm, promptText, pathCompleter, createPathCompleter } from "../src/tui/prompt.js";
+import { promptSelect, promptConfirm, promptText, promptMultiSelect, pathCompleter, createPathCompleter } from "../src/tui/prompt.js";
 import type { AppConfig } from "../src/config/types.js";
 
 describe("AI Prompt Builder", () => {
@@ -146,6 +146,29 @@ describe("TUI Prompts & Path Autocompletion", () => {
     const [hits, partial] = pathCompleter("invalid/directory/path/here/foo");
     assert.deepEqual(hits, []);
     assert.equal(partial, "foo");
+  });
+
+  it("should handle promptMultiSelect in non-interactive mode returning selected choices", async () => {
+    const res = await promptMultiSelect({
+      message: "Select branches:",
+      choices: [
+        { label: "main", value: "main", selected: true },
+        { label: "feature/1", value: "feature/1", selected: false },
+        { label: "feature/2", value: "feature/2", selected: true },
+      ],
+    });
+    assert.deepEqual(res, ["main", "feature/2"]);
+  });
+
+  it("should handle promptMultiSelect fallback to first item if none pre-selected", async () => {
+    const res = await promptMultiSelect({
+      message: "Select branches:",
+      choices: [
+        { label: "main", value: "main", selected: false },
+        { label: "dev", value: "dev", selected: false },
+      ],
+    });
+    assert.deepEqual(res, ["main"]);
   });
 });
 

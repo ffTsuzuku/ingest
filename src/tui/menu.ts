@@ -14,7 +14,9 @@ import { ReportStorage } from "../report/storage.js";
 import { renderMarkdownToAnsi, renderReportFileToAnsi } from "../report/viewer.js";
 import { CronScheduler } from "../scheduler/cron.js";
 import { LaunchdScheduler } from "../scheduler/launchd.js";
+import { renderScheduleStatusBox } from "../scheduler/status.js";
 import { SkillInstaller } from "../skill/installer.js";
+import { ConfigInitWizard } from "../config/init.js";
 import { Logger } from "../utils/logger.js";
 
 export interface MenuContext {
@@ -75,6 +77,11 @@ export class InteractiveTUI {
           hint: "Verify Antigravity (agy) / Opencode CLI integration",
         },
         {
+          label: "⚙️ Run Configuration Setup Wizard (--init)",
+          value: "init",
+          hint: "Initialize local .ingestrc or global config with guided setup",
+        },
+        {
           label: " Exit",
           value: "exit",
         },
@@ -110,6 +117,10 @@ export class InteractiveTUI {
           case "test-ai":
             await this.handleTestAI(ctx);
             break;
+          case "init":
+            await ConfigInitWizard.run({ cwd: ctx.currentRepoPath || process.cwd() });
+            ctx.config = await ConfigManager.load(customConfigPath);
+            break;
         }
       } catch (err) {
         await Logger.error("Interactive action failed", err);
@@ -130,18 +141,20 @@ export class InteractiveTUI {
   private static async handleGenerateReport(ctx: MenuContext): Promise<void> {
     console.log(`\n${ANSI.bold}${ANSI.yellow}=== Generate Git Report ===${ANSI.reset}\n`);
 
-    let targetRepos: Array<RepoConfig> = [];
+    let targetRepos: Array<RepoConfig & { repo_name: string | null; branches: string[] }> = [];
 
     if (ctx.isCurrentDirRepo && ctx.currentRepoPath) {
       const found = ctx.config.repos.find((r) => r.path === ctx.currentRepoPath);
-      if (found) {
-        targetRepos = [found];
-      } else {
-        const branches = await getGitBranches(ctx.currentRepoPath);
-        targetRepos = [{ path: ctx.currentRepoPath, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
-      }
+      let baseRepo: RepoConfig = found || {
+        path: ctx.currentRepoPath,
+        repo_name: null,
+        branches: (await getGitBranches(ctx.currentRepoPath)).slice(0, 2),
+      };
+      if (!baseRepo.branches || baseRepo.branches.length === 0) baseRepo.branches = ["main"];
+      targetRepos = [await ConfigManager.mergeRepoWithLocalConfig(baseRepo, ctx.currentRepoPath)];
     } else if (ctx.config.repos.length === 1) {
-      targetRepos = [ctx.config.repos[0]!];
+      const singleRepo = ctx.config.repos[0]!;
+      targetRepos = [await ConfigManager.mergeRepoWithLocalConfig(singleRepo, singleRepo.path)];
     } else if (ctx.config.repos.length > 1) {
       const repoChoices: Array<{ label: string; value: string }> = [];
       for (const repo of ctx.config.repos) {
@@ -175,15 +188,16 @@ export class InteractiveTUI {
         targetRepos = ctx.config.repos;
       } else {
         const found = ctx.config.repos.find((r) => r.path === selectedTarget);
-        if (found) {
-          targetRepos = [found];
-        } else {
-          const branches = await getGitBranches(selectedTarget);
-          targetRepos = [{ path: selectedTarget, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
-        }
+        let baseRepo: RepoConfig = found || {
+          path: selectedTarget,
+          repo_name: null,
+          branches: (await getGitBranches(selectedTarget)).slice(0, 2),
+        };
+        if (!baseRepo.branches || baseRepo.branches.length === 0) baseRepo.branches = ["main"];
+        targetRepos = [await ConfigManager.mergeRepoWithLocalConfig(baseRepo, selectedTarget)];
       }
     } else {
-      Logger.warn("No git repositories found in configuration or current directory.");
+      Logger.warn("No git repositories found in configuration, local .ingestrc, or current directory.");
       return;
     }
 
@@ -278,8 +292,9 @@ export class InteractiveTUI {
 
     for (const repo of targetRepos) {
       const repoPath = await resolveRepoPath(repo.path);
-      const repoName = await getRepoName(repoPath, repo.repo_name);
-      const branches = repo.branches && repo.branches.length > 0 ? repo.branches : ["main"];
+      const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
+      const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
+      const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
 
       console.log(`\n${ANSI.bold}Processing:${ANSI.reset} ${ANSI.cyan}${repoName}${ANSI.reset} (${repoPath})`);
 
@@ -288,13 +303,18 @@ export class InteractiveTUI {
 
       let diffStat;
       if (diffDeepDive && commits.length > 0) {
-        diffStat = await fetchDiffStat(repoPath, branches, dateFilter);
+        diffStat = await fetchDiffStat(repoPath, branches, dateFilter, effectiveRepo.max_diff_lines);
         if (diffStat) {
           console.log(`  Diff Stat: ${diffStat.filesChangedCount} files changed (+${diffStat.insertions}, -${diffStat.deletions}).`);
         }
       }
 
-      const activePrompt = await resolveRepoPrompt(ctx.config.prompt, repo.custom_prompt, null, repoPath);
+      const activePrompt = await resolveRepoPrompt(
+        ctx.config.prompt,
+        effectiveRepo.custom_prompt,
+        effectiveRepo.custom_prompt_file,
+        repoPath,
+      );
 
       const analysisContext = {
         repoName,
@@ -373,14 +393,8 @@ export class InteractiveTUI {
       console.log(`\n${ANSI.bold}${ANSI.yellow}=== Scheduler Wizard ===${ANSI.reset}\n`);
 
       const isMac = LaunchdScheduler.isMacOS();
-      const cronStatus = await CronScheduler.getStatus();
-      const launchdStatus = isMac ? await LaunchdScheduler.getStatus() : null;
-
-      console.log(`  ${ANSI.bold}System Scheduling Status:${ANSI.reset}`);
-      if (isMac) {
-        console.log(`  • macOS LaunchAgent: ${launchdStatus?.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${launchdStatus?.details})`);
-      }
-      console.log(`  • Crontab: ${cronStatus.active ? ANSI.green + "ACTIVE" : ANSI.gray + "INACTIVE"}${ANSI.reset} (${cronStatus.details})\n`);
+      const statusBox = await renderScheduleStatusBox();
+      console.log(statusBox + "\n");
 
       const choices = [
         { label: " Install / Update Daily Report Schedule", value: "install" },

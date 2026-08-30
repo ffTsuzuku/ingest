@@ -14,8 +14,10 @@ import { renderReportFileToAnsi } from "./report/viewer.js";
 import { showTerminalPager } from "./tui/pager.js";
 import { CronScheduler } from "./scheduler/cron.js";
 import { LaunchdScheduler } from "./scheduler/launchd.js";
+import { renderScheduleStatusBox } from "./scheduler/status.js";
 import { SkillInstaller } from "./skill/installer.js";
 import { Logger } from "./utils/logger.js";
+import { ConfigInitWizard } from "./config/init.js";
 import { ANSI } from "./tui/ansi.js";
 
 interface ParsedArgs {
@@ -29,6 +31,10 @@ interface ParsedArgs {
   sinceHours?: number;
   diffMode?: boolean;
   viewFile?: string;
+  init?: boolean;
+  quickInit?: boolean;
+  localInit?: boolean;
+  globalInit?: boolean;
   installSkill?: boolean;
   scheduleInstall?: boolean;
   scheduleStatus?: boolean;
@@ -48,6 +54,14 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.help = true;
     } else if (arg === "-i" || arg === "--interactive") {
       result.interactive = true;
+    } else if (arg === "--init" || arg === "init") {
+      result.init = true;
+    } else if (arg === "--quick" || arg === "--quick-init" || arg === "-q") {
+      result.quickInit = true;
+    } else if (arg === "--local") {
+      result.localInit = true;
+    } else if (arg === "--global") {
+      result.globalInit = true;
     } else if (arg === "--config" && i + 1 < args.length) {
       result.configPath = args[++i];
     } else if (arg === "--output-root" && i + 1 < args.length) {
@@ -90,6 +104,8 @@ ${ANSI.bold}${ANSI.brightCyan}ingest${ANSI.reset} - AI Daily Report Generator & 
 
 ${ANSI.bold}USAGE:${ANSI.reset}
   ingest                              Launch interactive TUI
+  ingest --init                       Interactive configuration setup wizard
+  ingest --init --quick               Quick setup with intelligent defaults (.ingestrc)
   ingest [config-path]                Run headless generation for all repos in config
   ingest --repo <path>                Run report for a single repository
   ingest --date <YYYY-MM-DD>          Generate report for a specific date
@@ -103,6 +119,10 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --schedule-remove            Remove automated schedules
 
 ${ANSI.bold}OPTIONS:${ANSI.reset}
+  --init                      Launch interactive configuration wizard
+  -q, --quick                 Use recommended defaults for fast initialization
+  --local                     Target local repo configuration (.ingestrc)
+  --global                    Target global configuration (~/.config/ingest/config.jsonc)
   -i, --interactive           Force interactive TUI mode
   --config <path>             Path to custom config.jsonc
   --output-root <path>        Override report output directory
@@ -138,7 +158,8 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       targetRepos = [existing];
     } else {
       const branches = await getGitBranches(resolved);
-      targetRepos = [{ path: resolved, repo_name: null, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
+      const baseRepo = { path: resolved, repo_name: null, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] };
+      targetRepos = [await ConfigManager.mergeRepoWithLocalConfig(baseRepo, resolved)];
     }
   }
 
@@ -146,9 +167,10 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
     // If no repos configured and CWD is a repo, run on CWD
     if (await isGitRepo(process.cwd())) {
       const branches = await getGitBranches(process.cwd());
-      targetRepos = [{ path: process.cwd(), repo_name: null, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
+      const baseRepo = { path: process.cwd(), repo_name: null, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] };
+      targetRepos = [await ConfigManager.mergeRepoWithLocalConfig(baseRepo, process.cwd())];
     } else {
-      Logger.warn("No repositories configured in config.jsonc or specified via --repo.");
+      Logger.warn("No repositories configured in config.jsonc, local .ingestrc, or specified via --repo.");
       return;
     }
   }
@@ -158,8 +180,9 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   for (const repo of targetRepos) {
     try {
       const repoPath = await resolveRepoPath(repo.path);
-      const repoName = await getRepoName(repoPath, repo.repo_name);
-      const branches = repo.branches && repo.branches.length > 0 ? repo.branches : ["main"];
+      const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
+      const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
+      const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
 
       console.log(`\n\x1b[1mAnalyzing repo:\x1b[0m \x1b[36m${repoName}\x1b[0m (${repoPath})`);
 
@@ -167,14 +190,14 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       Logger.info(`Found ${commits.length} commits across [${branches.join(", ")}].`);
 
       let diffStat;
-      if ((parsed.diffMode || repo.diff_mode !== false) && commits.length > 0) {
-        diffStat = await fetchDiffStat(repoPath, branches, dateFilter, repo.max_diff_lines);
+      if ((parsed.diffMode || effectiveRepo.diff_mode !== false) && commits.length > 0) {
+        diffStat = await fetchDiffStat(repoPath, branches, dateFilter, effectiveRepo.max_diff_lines);
       }
 
       const activePrompt = await resolveRepoPrompt(
         config.prompt,
-        repo.custom_prompt,
-        repo.custom_prompt_file,
+        effectiveRepo.custom_prompt,
+        effectiveRepo.custom_prompt_file,
         repoPath,
       );
 
@@ -223,19 +246,24 @@ export async function main(): Promise<void> {
     return;
   }
 
+  if (parsed.init || parsed.quickInit) {
+    await ConfigInitWizard.run({
+      quick: parsed.quickInit,
+      local: parsed.localInit,
+      global: parsed.globalInit,
+      cwd: process.cwd(),
+    });
+    return;
+  }
+
   if (parsed.installSkill) {
     await SkillInstaller.installGlobal();
     return;
   }
 
   if (parsed.scheduleStatus) {
-    const isMac = LaunchdScheduler.isMacOS();
-    if (isMac) {
-      const status = await LaunchdScheduler.getStatus();
-      console.log(`macOS LaunchAgent: ${status.active ? "ACTIVE" : "INACTIVE"} (${status.details})`);
-    }
-    const cronStatus = await CronScheduler.getStatus();
-    console.log(`Crontab: ${cronStatus.active ? "ACTIVE" : "INACTIVE"} (${cronStatus.details})`);
+    const statusBox = await renderScheduleStatusBox();
+    console.log(`\n${statusBox}\n`);
     return;
   }
 

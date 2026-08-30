@@ -41,6 +41,24 @@ export interface RawConfig {
   date_format?: string;
 }
 
+export interface LocalRepoConfig {
+  path?: string;
+  repo_name?: Nullable<string>;
+  branches?: string[];
+  custom_prompt?: Nullable<string>;
+  custom_prompt_file?: Nullable<string>;
+  diff_mode?: boolean;
+  max_diff_lines?: number;
+  output_root?: string;
+  error_log?: string;
+  provider?: ProviderConfigMap;
+  agents?: ProviderConfigMap;
+  default_provider?: "antigravity" | "opencode" | "gemini-cli" | "agy";
+  prompt?: string;
+  date_format?: string;
+  repos?: RepoConfig[];
+}
+
 export interface AppConfig {
   repos: Array<RepoConfig & { repo_name: Nullable<string>; branches: string[] }>;
   outputRoot: string;
@@ -51,3 +69,4 @@ export interface AppConfig {
   prompt: string;
   configPath: string;
 }
+

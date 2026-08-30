@@ -12,10 +12,12 @@ description: >-
 
 ## Key Capabilities
 
-1. **Interactive TUI Mode**:
-   - Run without arguments in any terminal:
+1. **Interactive TUI Mode & Setup Wizard**:
+   - Run interactive menu or guided configuration wizard:
      ```bash
      ingest
+     ingest --init
+     ingest --init --quick
      ```
    - Features arrow-key navigation, interactive date selectors, markdown report explorer with terminal pager, and scheduler setup.
 
@@ -55,8 +57,10 @@ description: >-
      ingest --install-skill
      ```
 
-## Configuration Format (`~/.config/ingest/config.jsonc`)
+## Configuration Architecture
 
+`ingest` supports hierarchical configurations:
+1. **Global Configuration** (`~/.config/ingest/config.jsonc`):
 ```jsonc
 {
   "repos": [
@@ -85,8 +89,20 @@ description: >-
 }
 ```
 
+2. **Local Repository Configuration** (`.ingestrc` or `ingest.config.jsonc` in any project root):
+```jsonc
+{
+  "repo_name": "custom-name",
+  "branches": ["main", "feature/v2"],
+  "custom_prompt": "Focus on API breaking changes and database migrations.",
+  "diff_mode": true,
+  "max_diff_lines": 300
+}
+```
+
 ## How to Assist Users
 
 - When the user wants a summary of today's work or a specific time period, suggest running `ingest` in the current directory or specifying `--date YYYY-MM-DD` or `--date YYYY-MM-DD..YYYY-MM-DD`.
 - When the user wants automated nightly reports, guide them through `ingest --schedule-install` or the interactive TUI Scheduler Wizard.
-- When the user wants to customize AI prompts per repo, update the `custom_prompt` or `custom_prompt_file` attribute in `~/.config/ingest/config.jsonc`.
+- When the user wants to customize AI prompts or branch targets per repo, suggest creating a local `.ingestrc` file in the repo root or updating `~/.config/ingest/config.jsonc`.
+
