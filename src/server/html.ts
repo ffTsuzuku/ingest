@@ -277,10 +277,32 @@ export function renderDashboardHtml(): string {
     }
 
     .report-date {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       color: var(--text-primary);
       font-family: var(--font-mono);
+    }
+
+    .style-badge {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .style-badge.system-centric {
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--accent-blue);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+    }
+
+    .style-badge.default {
+      background: rgba(110, 118, 129, 0.12);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
     }
 
     .report-meta-row {
@@ -1209,14 +1231,18 @@ export function renderDashboardHtml(): string {
         const isSelected = state.selectedReport && state.selectedReport.fileName === rep.fileName;
         li.className = 'report-item' + (isSelected ? ' active' : '');
         
+        const styleName = rep.reportStyle || 'default';
+        const badgeClass = rep.reportStyle === 'system-centric' ? 'style-badge system-centric' : 'style-badge default';
+        
         li.innerHTML = \`
           <div class="report-date-row">
-            <span class="report-date">📅 \${rep.dateStr}</span>
+            <span class="report-date">📅 \${escapeHtml(rep.dateStr)}</span>
+            <span class="\${badgeClass}">\${escapeHtml(styleName)}</span>
           </div>
           <div class="report-meta-row">
             <span>\${formatBytes(rep.sizeBytes)}</span>
             <span>•</span>
-            <span>\${new Date(rep.modifiedAt).toLocaleDateString()}</span>
+            <span>\${new Date(rep.modifiedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         \`;
         li.onclick = () => selectReport(rep);

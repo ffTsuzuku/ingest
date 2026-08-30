@@ -76,8 +76,12 @@ export class ReportStorage {
       // Output root might not exist yet
     }
 
-    // Sort by date descending
-    return reports.sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+    // Sort by date descending, then by modification time descending
+    return reports.sort((a, b) => {
+      const dateCmp = b.dateStr.localeCompare(a.dateStr);
+      if (dateCmp !== 0) return dateCmp;
+      return b.modifiedAt.getTime() - a.modifiedAt.getTime();
+    });
   }
 
   public static async listRepositories(
