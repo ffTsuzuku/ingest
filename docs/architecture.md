@@ -66,6 +66,6 @@ graph TD
 
 ### 2.7. `src/tui/`
 - **`ansi.ts`**: ANSI color codes, text formatting, line drawing, and cursor manipulation.
-- **`prompt.ts`**: Zero-dependency interactive prompts: single select (arrow keys), text input, and confirmation modals with seamless `Esc` back/cancel support.
+- **`prompt.ts`**: Zero-dependency interactive prompts: single select (arrow keys), text input with Tab path autocompletion (`~`, relative `./`, `../`, absolute `/`, directory `/` appending), and confirmation modals with seamless `Esc` back/cancel support.
 - **`pager.ts`**: Scrollable terminal pager supporting `Up`/`Down`, `PageUp`/`PageDown`, `Home`/`End`, and `q`/`Esc` to exit or return.
 - **`menu.ts`**: Interactive TUI orchestration loop providing fluid `Esc` back navigation across all menus, submenus, and wizards without intrusive confirmation prompts.

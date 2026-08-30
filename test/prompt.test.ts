@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildAnalysisPrompt, resolveRepoPrompt } from "../src/ai/prompt.js";
 import { AIFactory } from "../src/ai/factory.js";
-import { promptSelect, promptConfirm } from "../src/tui/prompt.js";
+import { promptSelect, promptConfirm, promptText, pathCompleter, createPathCompleter } from "../src/tui/prompt.js";
 import type { AppConfig } from "../src/config/types.js";
 
 describe("AI Prompt Builder", () => {
@@ -72,7 +72,7 @@ describe("AI Factory", () => {
   });
 });
 
-describe("TUI Prompts", () => {
+describe("TUI Prompts & Path Autocompletion", () => {
   it("should return first choice in non-interactive / test mode", async () => {
     const res = await promptSelect({
       message: "Select an option:",
@@ -97,5 +97,56 @@ describe("TUI Prompts", () => {
     });
     assert.equal(resNo, false);
   });
+
+  it("should handle promptText in non-interactive mode", async () => {
+    const res = await promptText({
+      message: "Enter path:",
+      defaultValue: "/default/path",
+      completer: "path",
+    });
+    assert.equal(res, "/default/path");
+  });
+
+  it("should autocomplete tilde to home directory slash", () => {
+    const [hits, partial] = pathCompleter("~");
+    assert.deepEqual(hits, ["~/"]);
+    assert.equal(partial, "~");
+  });
+
+  it("should autocomplete relative directories and append trailing slash", () => {
+    const [hits, partial] = pathCompleter("src/t");
+    assert.equal(partial, "t");
+    assert.ok(hits.includes("tui/"));
+  });
+
+  it("should autocomplete files and folders in directory", () => {
+    const [hits, partial] = pathCompleter("src/tui/p");
+    assert.equal(partial, "p");
+    assert.ok(hits.includes("prompt.ts"));
+    assert.ok(hits.includes("pager.ts"));
+  });
+
+  it("should filter to directories only when directoriesOnly is enabled", () => {
+    const dirCompleter = createPathCompleter({ directoriesOnly: true });
+    const [hits] = dirCompleter("src/");
+    assert.ok(hits.includes("tui/"));
+    assert.ok(!hits.includes("index.ts"));
+  });
+
+  it("should ignore hidden dotfiles unless prefix starts with a dot", () => {
+    const [hitsNormal] = pathCompleter("");
+    assert.ok(!hitsNormal.some((h) => h.startsWith(".")));
+
+    const [hitsHidden, partial] = pathCompleter(".g");
+    assert.equal(partial, ".g");
+    assert.ok(hitsHidden.some((h) => h.startsWith(".g")));
+  });
+
+  it("should handle non-existent directories gracefully", () => {
+    const [hits, partial] = pathCompleter("invalid/directory/path/here/foo");
+    assert.deepEqual(hits, []);
+    assert.equal(partial, "foo");
+  });
 });
+
 

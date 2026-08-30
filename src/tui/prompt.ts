@@ -1,3 +1,6 @@
+import { readdirSync, statSync } from "node:fs";
+import { join, sep } from "node:path";
+import { homedir } from "node:os";
 import * as readline from "node:readline";
 import { ANSI, truncate } from "./ansi.js";
 
@@ -5,6 +8,93 @@ export interface SelectOption<T = string> {
   label: string;
   value: T;
   hint?: string;
+}
+
+export interface PathCompleterOptions {
+  directoriesOnly?: boolean;
+}
+
+export function createPathCompleter(options: PathCompleterOptions = {}): readline.Completer {
+  return function pathCompleter(line: string): [string[], string] {
+    const raw = line.trim();
+
+    if (raw === "~") {
+      return [["~/"], "~"];
+    }
+
+    let expanded = raw;
+    if (raw.startsWith("~" + sep) || raw.startsWith("~/")) {
+      expanded = join(homedir(), raw.slice(2));
+    } else if (raw === "~") {
+      expanded = homedir();
+    }
+
+    let searchDir: string;
+    let partial: string;
+
+    if (raw.endsWith("/") || raw.endsWith(sep)) {
+      searchDir = expanded;
+      partial = "";
+    } else {
+      const lastSlashIndex = Math.max(raw.lastIndexOf("/"), raw.lastIndexOf("\\"));
+      if (lastSlashIndex >= 0) {
+        const dirPart = expanded.slice(0, expanded.lastIndexOf(sep) + 1);
+        searchDir = dirPart || (sep === "\\" ? "C:\\" : "/");
+        partial = raw.slice(lastSlashIndex + 1);
+      } else {
+        searchDir = process.cwd();
+        partial = raw;
+      }
+    }
+
+    try {
+      const entries = readdirSync(searchDir || ".", { withFileTypes: true });
+      const hits: string[] = [];
+
+      for (const entry of entries) {
+        // Skip hidden files unless user started typing with a dot
+        if (!partial.startsWith(".") && entry.name.startsWith(".")) {
+          continue;
+        }
+
+        if (entry.name.startsWith(partial)) {
+          let isDir = entry.isDirectory();
+          if (!isDir && entry.isSymbolicLink()) {
+            try {
+              const fullPath = join(searchDir || ".", entry.name);
+              isDir = statSync(fullPath).isDirectory();
+            } catch {
+              isDir = false;
+            }
+          }
+
+          if (options.directoriesOnly && !isDir) {
+            continue;
+          }
+
+          let name = entry.name;
+          if (isDir) {
+            name += "/";
+          }
+          hits.push(name);
+        }
+      }
+
+      hits.sort((a, b) => a.localeCompare(b));
+      return [hits, partial];
+    } catch {
+      return [[], partial];
+    }
+  };
+}
+
+export const pathCompleter: readline.Completer = createPathCompleter();
+
+export interface PromptTextOptions {
+  message: string;
+  defaultValue?: string;
+  validate?: (val: string) => boolean | string;
+  completer?: readline.Completer | "path" | "dir";
 }
 
 export async function promptSelect<T = string>(options: {
@@ -108,19 +198,27 @@ export async function promptSelect<T = string>(options: {
   });
 }
 
-export async function promptText(options: {
-  message: string;
-  defaultValue?: string;
-  validate?: (val: string) => boolean | string;
-}): Promise<string | null> {
+export async function promptText(options: PromptTextOptions): Promise<string | null> {
   if (!process.stdin.isTTY) {
     return options.defaultValue || "";
   }
 
   return new Promise((resolvePromise) => {
+    let resolvedCompleter: readline.Completer | undefined;
+    if (typeof options.completer === "function") {
+      resolvedCompleter = options.completer;
+    } else if (options.completer === "dir") {
+      resolvedCompleter = createPathCompleter({ directoriesOnly: true });
+    } else if (options.completer === "path") {
+      resolvedCompleter = pathCompleter;
+    }
+
+    process.stdin.resume();
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
+      completer: resolvedCompleter,
     });
 
     const promptMsg = options.defaultValue

@@ -45,12 +45,13 @@ Interactive screens are managed in [`src/tui/menu.ts`](file:///Users/tsuzuku/Git
 
 1. Add your new action handler to `menu.ts`:
    ```typescript
-   async function handleCustomAction(ctx: MenuContext): Promise<void> {
-     const answer = await promptText({
-       message: "Enter custom parameter:",
-     });
-     // Execute logic...
-   }
+    async function handleCustomAction(ctx: MenuContext): Promise<void> {
+      const customPath = await promptText({
+        message: "Enter repository path:",
+        completer: "path", // Built-in Tab path autocompletion
+      });
+      // Execute logic...
+    }
    ```
 2. Add the option to `renderMainMenu()` with an emoji icon and description.
 

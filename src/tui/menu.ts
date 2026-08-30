@@ -130,69 +130,61 @@ export class InteractiveTUI {
   private static async handleGenerateReport(ctx: MenuContext): Promise<void> {
     console.log(`\n${ANSI.bold}${ANSI.yellow}=== Generate Git Report ===${ANSI.reset}\n`);
 
-    // Select repository
-    const repoChoices: Array<{ label: string; value: string }> = [];
-    if (ctx.isCurrentDirRepo && ctx.currentRepoPath) {
-      repoChoices.push({
-        label: ` Current Repository (${ctx.currentRepoPath})`,
-        value: ctx.currentRepoPath,
-      });
-    }
+    let targetRepos: Array<RepoConfig> = [];
 
-    for (const repo of ctx.config.repos) {
-      if (repo.path !== ctx.currentRepoPath) {
+    if (ctx.isCurrentDirRepo && ctx.currentRepoPath) {
+      const found = ctx.config.repos.find((r) => r.path === ctx.currentRepoPath);
+      if (found) {
+        targetRepos = [found];
+      } else {
+        const branches = await getGitBranches(ctx.currentRepoPath);
+        targetRepos = [{ path: ctx.currentRepoPath, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
+      }
+    } else if (ctx.config.repos.length === 1) {
+      targetRepos = [ctx.config.repos[0]!];
+    } else if (ctx.config.repos.length > 1) {
+      const repoChoices: Array<{ label: string; value: string }> = [];
+      for (const repo of ctx.config.repos) {
         const name = await getRepoName(repo.path, repo.repo_name);
         repoChoices.push({
           label: ` ${name} (${repo.path})`,
           value: repo.path,
         });
       }
-    }
 
-    repoChoices.push({
-      label: " Enter another repository path...",
-      value: "__custom__",
-    });
-
-    if (ctx.config.repos.length > 1) {
       repoChoices.push({
         label: " All Configured Repositories",
         value: "__all__",
       });
-    }
 
-    repoChoices.push({
-      label: " Back",
-      value: "__back__",
-    });
+      repoChoices.push({
+        label: " Back",
+        value: "__back__",
+      });
 
-    const selectedTarget = await promptSelect({
-      message: "Which repository would you like to analyze?",
-      choices: repoChoices,
-    });
+      const selectedTarget = await promptSelect({
+        message: "Which repository would you like to analyze?",
+        choices: repoChoices,
+      });
 
-    if (!selectedTarget || selectedTarget === "__back__") {
-      return;
-    }
-
-    let targetRepos: Array<RepoConfig> = [];
-
-    if (selectedTarget === "__all__") {
-      targetRepos = ctx.config.repos;
-    } else if (selectedTarget === "__custom__") {
-      const customPath = await promptText({ message: "Enter absolute or relative path to git repository:" });
-      if (!customPath) return;
-      const resolved = await resolveRepoPath(customPath);
-      const branches = await getGitBranches(resolved);
-      targetRepos = [{ path: resolved, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
-    } else {
-      const found = ctx.config.repos.find((r) => r.path === selectedTarget);
-      if (found) {
-        targetRepos = [found];
-      } else {
-        const branches = await getGitBranches(selectedTarget);
-        targetRepos = [{ path: selectedTarget, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
+      if (!selectedTarget || selectedTarget === "__back__") {
+        return;
       }
+
+      if (selectedTarget === "__all__") {
+        targetRepos = ctx.config.repos;
+      } else {
+        const found = ctx.config.repos.find((r) => r.path === selectedTarget);
+        if (found) {
+          targetRepos = [found];
+        } else {
+          const branches = await getGitBranches(selectedTarget);
+          targetRepos = [{ path: selectedTarget, branches: branches.length > 0 ? branches.slice(0, 2) : ["main"] }];
+        }
+      }
+    } else {
+      Logger.warn("No git repositories found in configuration or current directory.");
+      return;
     }
 
     // Select Date filter
@@ -421,14 +413,19 @@ export class InteractiveTUI {
       console.log(`  Output Root Directory: ${ANSI.cyan}${ctx.config.outputRoot}${ANSI.reset}`);
       console.log(`  Default AI Provider: ${ANSI.cyan}${ctx.config.defaultProvider}${ANSI.reset}\n`);
 
+      const choices = [];
+      if (ctx.isCurrentDirRepo && ctx.currentRepoPath) {
+        choices.push({ label: " Add Current Directory to Monitored Repos", value: "add_cwd" });
+      }
+      choices.push(
+        { label: " Edit Default AI Prompt Template", value: "edit_prompt" },
+        { label: " Switch Default AI Provider (Antigravity / Opencode / Gemini CLI)", value: "switch_provider" },
+        { label: " Back", value: "back" },
+      );
+
       const action = await promptSelect({
         message: "What would you like to configure?",
-        choices: [
-          { label: " Add Current Directory to Monitored Repos", value: "add_cwd" },
-          { label: " Edit Default AI Prompt Template", value: "edit_prompt" },
-          { label: " Switch Default AI Provider (Antigravity / Opencode / Gemini CLI)", value: "switch_provider" },
-          { label: " Back", value: "back" },
-        ],
+        choices,
       });
 
       if (!action || action === "back") return;
