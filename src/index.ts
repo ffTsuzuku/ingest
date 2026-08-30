@@ -148,7 +148,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       Logger.info(`Found ${commits.length} commits across [${branches.join(", ")}].`);
 
       let diffStat;
-      if ((parsed.diffMode || repo.diff_mode) && commits.length > 0) {
+      if ((parsed.diffMode || repo.diff_mode !== false) && commits.length > 0) {
         diffStat = await fetchDiffStat(repoPath, branches, dateFilter, repo.max_diff_lines);
       }
 

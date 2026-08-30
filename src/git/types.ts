@@ -19,6 +19,7 @@ export interface DiffStat {
     deletions: number;
   }>;
   diffSummary: string;
+  diffPatches?: string;
 }
 
 export interface RepoScanResult {

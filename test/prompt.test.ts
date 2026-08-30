@@ -29,6 +29,7 @@ describe("AI Prompt Builder", () => {
         deletions: 10,
         fileStats: [{ path: "src/auth.ts", insertions: 50, deletions: 10 }],
         diffSummary: "src/auth.ts | 60 +++++-",
+        diffPatches: "@@ -1,5 +1,6 @@\n+export function login() {}",
       },
       basePrompt: "Default base prompt",
     });
@@ -38,6 +39,9 @@ describe("AI Prompt Builder", () => {
     assert.ok(prompt.includes("feat: add oauth authentication"));
     assert.ok(prompt.includes("Diff Deep-Dive Statistics"));
     assert.ok(prompt.includes("+50, -10"));
+    assert.ok(prompt.includes("export function login()"));
+    assert.ok(prompt.includes("Executive Summary"));
+    assert.ok(prompt.includes("Key Architectural & Implementation Changes"));
   });
 
   it("should prioritize customPrompt over basePrompt", async () => {

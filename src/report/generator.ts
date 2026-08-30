@@ -46,17 +46,20 @@ export function generateEmptyReport(context: AnalysisContext): { markdown: strin
 
   const markdown = `# ${context.repoName} - ${context.dateStr}
 
-## Commit Summary
+## Executive Summary
 No commit activity recorded in the specified time window.
 
-## Key Changes
+## Key Architectural & Implementation Changes
 No code changes detected.
+
+## Commit Breakdown
+None.
+
+## Impact & Risk Assessment
+No changes to configuration, APIs, or dependencies.
 
 ## Contributors
 None
-
-## Overall Narrative
-The repository had no active commit activity during this reporting window.
 
 ---
 *Generated on ${generatedAt} (0 commits analyzed across branches: ${context.branches.join(", ")})*

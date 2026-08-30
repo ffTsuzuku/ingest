@@ -1,31 +1,48 @@
-import { ANSI } from "./ansi.js";
+import { ANSI, visibleLength, wrapAnsiLine } from "./ansi.js";
 
-export async function showTerminalPager(lines: string[], title = "Report Viewer"): Promise<void> {
+export async function showTerminalPager(rawLines: string[], title = "Report Viewer"): Promise<void> {
   if (!process.stdin.isTTY) {
     // Non-interactive fallback: just print the lines
-    console.log(lines.join("\n"));
+    console.log(rawLines.join("\n"));
     return;
   }
 
   return new Promise((resolvePromise) => {
     let topRow = 0;
-    const totalLines = lines.length;
+
+    const getDisplayRows = (width: number): string[] => {
+      const rows: string[] = [];
+      for (const line of rawLines) {
+        if (visibleLength(line) > width) {
+          rows.push(...wrapAnsiLine(line, width));
+        } else {
+          rows.push(line);
+        }
+      }
+      return rows;
+    };
 
     const render = () => {
       const height = process.stdout.rows || 24;
       const width = process.stdout.columns || 80;
-      const pageHeight = Math.max(1, height - 3);
+      const pageHeight = Math.max(1, height - 2);
+
+      const displayRows = getDisplayRows(width);
+      const totalLines = displayRows.length;
 
       const maxTop = Math.max(0, totalLines - pageHeight);
       topRow = Math.min(topRow, maxTop);
       topRow = Math.max(0, topRow);
 
-      const visibleLines = lines.slice(topRow, topRow + pageHeight);
+      const visibleLines = displayRows.slice(topRow, topRow + pageHeight);
       const output: string[] = [ANSI.clearScreen];
 
       // Header bar
-      const headerText = ` ${title} [Lines ${topRow + 1}-${Math.min(topRow + pageHeight, totalLines)} of ${totalLines}] `;
-      output.push(`${ANSI.bgBlue}${ANSI.brightWhite}${headerText.padEnd(width)}${ANSI.reset}`);
+      const startLineNum = totalLines > 0 ? topRow + 1 : 0;
+      const endLineNum = Math.min(topRow + pageHeight, totalLines);
+      const headerContent = ` ${title} [Lines ${startLineNum}-${endLineNum} of ${totalLines}] `;
+      const headerPad = Math.max(0, width - visibleLength(headerContent));
+      output.push(`${ANSI.bgBlue}${ANSI.brightWhite}${headerContent}${" ".repeat(headerPad)}${ANSI.reset}`);
 
       // Content
       for (const line of visibleLines) {
@@ -38,9 +55,10 @@ export async function showTerminalPager(lines: string[], title = "Report Viewer"
       }
 
       // Footer status bar
-      const percent = totalLines > 0 ? Math.round((Math.min(topRow + pageHeight, totalLines) / totalLines) * 100) : 100;
-      const footerText = ` (↑/↓ or j/k: Scroll | PgUp/PgDn: Jump | q: Exit)  [${percent}%]`;
-      output.push(`${ANSI.bgGray}${ANSI.white}${footerText.padEnd(width)}${ANSI.reset}`);
+      const percent = totalLines > 0 ? Math.round((endLineNum / totalLines) * 100) : 100;
+      const footerContent = ` (↑/↓ or j/k: Scroll | Space/b: Page | g/G: Top/End | q: Exit)  [${percent}%]`;
+      const footerPad = Math.max(0, width - visibleLength(footerContent));
+      output.push(`${ANSI.bgGray}${ANSI.white}${footerContent}${" ".repeat(footerPad)}${ANSI.reset}`);
 
       process.stdout.write(output.join("\n"));
     };
@@ -52,7 +70,7 @@ export async function showTerminalPager(lines: string[], title = "Report Viewer"
       process.stdin.pause();
       process.stdin.removeListener("data", onData);
       process.stdout.removeListener("resize", onResize);
-      process.stdout.write(ANSI.showCursor + "\n");
+      process.stdout.write(ANSI.altScreenExit + ANSI.showCursor + "\n");
       resolvePromise();
     };
 
@@ -63,15 +81,17 @@ export async function showTerminalPager(lines: string[], title = "Report Viewer"
     const onData = (chunk: Buffer) => {
       const key = chunk.toString();
       const height = process.stdout.rows || 24;
-      const pageHeight = Math.max(1, height - 3);
+      const width = process.stdout.columns || 80;
+      const pageHeight = Math.max(1, height - 2);
+      const totalLines = getDisplayRows(width).length;
 
       if (key === "q" || key === "Q" || key === "\u0003" || key === "\u001b") {
         cleanup();
         return;
       }
 
-      // Arrow Down or j
-      if (key === "\u001b[B" || key === "j") {
+      // Arrow Down, j, or Enter
+      if (key === "\u001b[B" || key === "j" || key === "\r" || key === "\n") {
         topRow = Math.min(totalLines - 1, topRow + 1);
         render();
       }
@@ -80,23 +100,23 @@ export async function showTerminalPager(lines: string[], title = "Report Viewer"
         topRow = Math.max(0, topRow - 1);
         render();
       }
-      // Page Down or Space
-      else if (key === "\u001b[6~" || key === " ") {
+      // Page Down, Space, or Ctrl+D / d
+      else if (key === "\u001b[6~" || key === " " || key === "\u0004" || key === "d") {
         topRow = Math.min(totalLines - pageHeight, topRow + pageHeight);
         render();
       }
-      // Page Up or b
-      else if (key === "\u001b[5~" || key === "b") {
+      // Page Up, b, or Ctrl+U / u
+      else if (key === "\u001b[5~" || key === "b" || key === "\u0015" || key === "u") {
         topRow = Math.max(0, topRow - pageHeight);
         render();
       }
-      // Home or g
-      else if (key === "\u001b[H" || key === "g") {
+      // Home, g, or standard top keys
+      else if (key === "\u001b[H" || key === "g" || key === "\u001b[1~" || key === "\u001b[7~") {
         topRow = 0;
         render();
       }
-      // End or G
-      else if (key === "\u001b[F" || key === "G") {
+      // End, G, or standard bottom keys
+      else if (key === "\u001b[F" || key === "G" || key === "\u001b[4~" || key === "\u001b[8~") {
         topRow = Math.max(0, totalLines - pageHeight);
         render();
       }
@@ -104,7 +124,7 @@ export async function showTerminalPager(lines: string[], title = "Report Viewer"
 
     process.stdin.setRawMode(true);
     process.stdin.resume();
-    process.stdout.write(ANSI.hideCursor);
+    process.stdout.write(ANSI.altScreenEnter + ANSI.hideCursor);
     process.stdin.on("data", onData);
     process.stdout.on("resize", onResize);
 

@@ -50,7 +50,189 @@ export const ANSI = {
 
 export function stripAnsi(text: string): string {
   // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  return text
+    // Strip OSC sequences (e.g. \x1b]8;;url\x07 or \x1b]8;;url\x1b\)
+    .replace(/\x1b\](?:[^\x07\x1b]|\x1b[^\\])*?(?:\x07|\x1b\\)/g, "")
+    // Strip CSI sequences (e.g. \x1b[31m, \x1b[?25h, etc.)
+    .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")
+    // Strip other escape sequences
+    .replace(/\x1b[@-Z\\-_]/g, "");
+}
+
+export function visibleLength(text: string): number {
+  return stripAnsi(text).length;
+}
+
+export class AnsiStyleTracker {
+  private fg = "";
+  private bg = "";
+  private bold = false;
+  private dim = false;
+  private italic = false;
+  private underline = false;
+  private strike = false;
+
+  public processCode(codeStr: string): void {
+    const match = codeStr.match(/^\x1b\[([0-9;?]*)m$/);
+    if (!match) return;
+    const rawCodes = match[1] ? match[1].split(";").map(Number) : [0];
+
+    for (const c of rawCodes) {
+      if (c === 0) {
+        this.fg = "";
+        this.bg = "";
+        this.bold = false;
+        this.dim = false;
+        this.italic = false;
+        this.underline = false;
+        this.strike = false;
+      } else if (c === 1) {
+        this.bold = true;
+      } else if (c === 2) {
+        this.dim = true;
+      } else if (c === 3) {
+        this.italic = true;
+      } else if (c === 4) {
+        this.underline = true;
+      } else if (c === 9) {
+        this.strike = true;
+      } else if (c === 22) {
+        this.bold = false;
+        this.dim = false;
+      } else if (c === 23) {
+        this.italic = false;
+      } else if (c === 24) {
+        this.underline = false;
+      } else if (c === 29) {
+        this.strike = false;
+      } else if (c === 39) {
+        this.fg = "";
+      } else if (c === 49) {
+        this.bg = "";
+      } else if ((c >= 30 && c <= 37) || (c >= 90 && c <= 97)) {
+        this.fg = `\x1b[${c}m`;
+      } else if ((c >= 40 && c <= 47) || (c >= 100 && c <= 107)) {
+        this.bg = `\x1b[${c}m`;
+      }
+    }
+  }
+
+  public getActiveCodes(): string {
+    let result = "";
+    if (this.bold) result += "\x1b[1m";
+    if (this.dim) result += "\x1b[2m";
+    if (this.italic) result += "\x1b[3m";
+    if (this.underline) result += "\x1b[4m";
+    if (this.strike) result += "\x1b[9m";
+    if (this.fg) result += this.fg;
+    if (this.bg) result += this.bg;
+    return result;
+  }
+
+  public hasActiveStyles(): boolean {
+    return this.bold || this.dim || this.italic || this.underline || this.strike || !!this.fg || !!this.bg;
+  }
+}
+
+export function wrapAnsiLine(line: string, maxWidth: number, hangingIndent = ""): string[] {
+  if (maxWidth <= 0) return [line];
+  const totalVisible = visibleLength(line);
+  if (totalVisible <= maxWidth) {
+    return [line];
+  }
+
+  const tokenRegex = /(?:\x1b\](?:[^\x07\x1b]|\x1b[^\\])*?(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[a-zA-Z]|\x1b[@-Z\\-_]|[^\s\x1b]+|\s+)/g;
+  const tokens = line.match(tokenRegex) || [line];
+
+  const result: string[] = [];
+  const tracker = new AnsiStyleTracker();
+
+  let currentLine = "";
+  let currentVisibleWidth = 0;
+  let isFirstLine = true;
+  const hangingVisibleWidth = visibleLength(hangingIndent);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+
+    if (token.startsWith("\x1b")) {
+      tracker.processCode(token);
+      currentLine += token;
+      continue;
+    }
+
+    const tokenVisibleLen = stripAnsi(token).length;
+    const isWhitespace = /^\s+$/.test(token);
+
+    if (isWhitespace) {
+      if (currentVisibleWidth === hangingVisibleWidth && !isFirstLine) {
+        continue;
+      }
+      if (currentVisibleWidth + tokenVisibleLen <= maxWidth) {
+        currentLine += token;
+        currentVisibleWidth += tokenVisibleLen;
+      } else {
+        if (tracker.hasActiveStyles()) {
+          currentLine += ANSI.reset;
+        }
+        result.push(currentLine);
+        isFirstLine = false;
+        currentLine = hangingIndent + tracker.getActiveCodes();
+        currentVisibleWidth = hangingVisibleWidth;
+      }
+      continue;
+    }
+
+    // Word token
+    if (currentVisibleWidth + tokenVisibleLen <= maxWidth) {
+      currentLine += token;
+      currentVisibleWidth += tokenVisibleLen;
+    } else {
+      if (currentVisibleWidth > (isFirstLine ? 0 : hangingVisibleWidth)) {
+        if (tracker.hasActiveStyles()) {
+          currentLine += ANSI.reset;
+        }
+        result.push(currentLine);
+        isFirstLine = false;
+        currentLine = hangingIndent + tracker.getActiveCodes();
+        currentVisibleWidth = hangingVisibleWidth;
+      }
+
+      if (tokenVisibleLen > maxWidth - currentVisibleWidth) {
+        let remaining = token;
+        while (remaining.length > 0) {
+          const available = Math.max(1, maxWidth - currentVisibleWidth);
+          const chunk = remaining.slice(0, available);
+          remaining = remaining.slice(available);
+
+          currentLine += chunk;
+          currentVisibleWidth += chunk.length;
+
+          if (remaining.length > 0) {
+            if (tracker.hasActiveStyles()) {
+              currentLine += ANSI.reset;
+            }
+            result.push(currentLine);
+            isFirstLine = false;
+            currentLine = hangingIndent + tracker.getActiveCodes();
+            currentVisibleWidth = hangingVisibleWidth;
+          }
+        }
+      } else {
+        currentLine += token;
+        currentVisibleWidth += tokenVisibleLen;
+      }
+    }
+  }
+
+  if (currentLine.length > 0) {
+    if (tracker.hasActiveStyles()) {
+      currentLine += ANSI.reset;
+    }
+    result.push(currentLine);
+  }
+
+  return result.length > 0 ? result : [""];
 }
 
 export function truncate(text: string, maxWidth: number): string {
@@ -62,13 +244,13 @@ export function truncate(text: string, maxWidth: number): string {
 export function drawBox(title: string, contentLines: string[], width = 70): string[] {
   const horizontal = "─".repeat(width - 2);
   const titleFormatted = title ? ` ${ANSI.bold}${title}${ANSI.reset} ` : "";
-  const titleLen = stripAnsi(titleFormatted).length;
+  const titleLen = visibleLength(titleFormatted);
   const topBar = `┌${titleFormatted}${"─".repeat(Math.max(0, width - 2 - titleLen))}┐`;
   const bottomBar = `└${horizontal}┘`;
 
   const renderedLines = contentLines.map((line) => {
-    const plain = stripAnsi(line);
-    const padding = Math.max(0, width - 4 - plain.length);
+    const plain = visibleLength(line);
+    const padding = Math.max(0, width - 4 - plain);
     return `│ ${line}${" ".repeat(padding)} │`;
   });
 

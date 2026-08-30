@@ -79,7 +79,7 @@ description: >-
       "api_key_env": null
     }
   },
-  "prompt": "Summarize repo activity from last 24h: commit messages, authors, key patterns, overall narrative."
+  "prompt": "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact."
 }
 ```
 

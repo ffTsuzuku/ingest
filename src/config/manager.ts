@@ -10,7 +10,7 @@ export const DEFAULT_CONFIG_PATH = join(DEFAULT_CONFIG_DIR, "config.jsonc");
 export const DEFAULT_OUTPUT_ROOT = join(homedir(), "reports");
 export const DEFAULT_ERROR_LOG = "error.log";
 export const DEFAULT_PROMPT =
-  "Summarize repo activity from last 24h: commit messages, authors, key patterns, overall narrative.";
+  "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact.";
 
 export function expandHome(inputPath: string): string {
   if (inputPath === "~" || inputPath.startsWith("~/")) {
@@ -56,7 +56,7 @@ export class ConfigManager {
       "api_key_env": null
     }
   },
-  "prompt": "Summarize repo activity from last 24h: commit messages, authors, key patterns, overall narrative."
+  "prompt": "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact."
 }
 `;
   }
@@ -105,7 +105,7 @@ export class ConfigManager {
         branches,
         custom_prompt: repo.custom_prompt ?? null,
         custom_prompt_file: repo.custom_prompt_file ?? null,
-        diff_mode: repo.diff_mode ?? false,
+        diff_mode: repo.diff_mode ?? true,
         max_diff_lines: repo.max_diff_lines ?? 200,
       };
     });
