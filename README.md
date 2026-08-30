@@ -1,4 +1,4 @@
-# git-ingest
+# ingest
 
 > AI-powered Git repository daily report generator, interactive TUI, diff deep-dive explorer, and automated scheduling suite.
 
@@ -10,21 +10,36 @@
 - 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`).
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
 - ⏰ **Automated Schedulers (macOS LaunchAgent + Linux Cron)**: Install, manage, test, and inspect recurring daily report jobs seamlessly.
-- 🤖 **Global AI Skill Deployment**: Installs standard AI skill files (`skills/git-ingest/SKILL.md`) to `~/.gemini/config/skills/git-ingest/` so AI assistants can directly assist users.
-- ⚙️ **JSONC Configuration**: Clean configuration with comment support, custom prompt templates per repo, and support for Opencode CLI and Gemini CLI.
+- 🤖 **Global AI Skill Deployment**: Installs standard AI skill files (`skills/ingest/SKILL.md`) to `~/.gemini/config/skills/ingest/` so AI assistants can directly assist users.
+- ⚙️ **JSONC Configuration**: Clean configuration with comment support, custom prompt templates per repo, and support for Antigravity CLI, Opencode CLI, and Gemini CLI.
 
 ---
 
 ## 📦 Installation & Quickstart
 
-No runtime dependencies required!
+Install globally via npm:
 
 ```bash
-# Launch interactive TUI
-npx ts-node src/index.ts
+npm install -g ingest
+```
 
-# Or run headless daily summary for all configured repos
-npx ts-node src/index.ts ~/.config/git-ingest/config.jsonc
+Or execute directly with npx:
+
+```bash
+npx ingest
+```
+
+### Development & Local Setup
+
+```bash
+# Clone and build
+git clone <repo-url>
+cd ingest
+npm install
+npm run build
+
+# Launch interactive TUI
+npm start
 ```
 
 ---
@@ -33,29 +48,32 @@ npx ts-node src/index.ts ~/.config/git-ingest/config.jsonc
 
 ```bash
 # Launch interactive TUI menu
-git-ingest
+ingest
+
+# Run headless report generation for all configured repos
+ingest ~/.config/ingest/config.jsonc
 
 # Run report for a specific repository on a specific date
-git-ingest --repo /path/to/repo --date 2026-04-05
+ingest --repo /path/to/repo --date 2026-04-05
 
 # Enable deep-dive code diff analysis
-git-ingest --repo /path/to/repo --diff
+ingest --repo /path/to/repo --diff
 
 # View any markdown report in the terminal pager
-git-ingest --view ~/reports/my-repo/2026-04-05-summary.md
+ingest --view ~/reports/my-repo/2026-04-05-summary.md
 
-# Deploy AI Skill to ~/.gemini/config/skills/git-ingest/
-git-ingest --install-skill
+# Deploy AI Skill to ~/.gemini/config/skills/ingest/
+ingest --install-skill
 
 # Scheduler automation
-git-ingest --schedule-install --time 00:00
-git-ingest --schedule-status
-git-ingest --schedule-remove
+ingest --schedule-install --time 00:00
+ingest --schedule-status
+ingest --schedule-remove
 ```
 
 ---
 
-## ⚙️ Configuration (`~/.config/git-ingest/config.jsonc`)
+## ⚙️ Configuration (`~/.config/ingest/config.jsonc`)
 
 ```jsonc
 {

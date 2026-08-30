@@ -15,9 +15,9 @@ describe("Markdown Terminal Renderer", () => {
   });
 
   it("should format inline bold, code tags, and links", () => {
-    const formatted = formatInlineMarkdown("Use `git-ingest` with **strong** emphasis and [docs](file:///path/to/docs)");
+    const formatted = formatInlineMarkdown("Use `ingest` with **strong** emphasis and [docs](file:///path/to/docs)");
     const plain = stripAnsi(formatted);
-    assert.equal(plain, "Use git-ingest with strong emphasis and docs");
+    assert.equal(plain, "Use ingest with strong emphasis and docs");
     assert.ok(formatted.includes("\x1b]8;;file:///path/to/docs\x07"));
   });
 
@@ -50,7 +50,7 @@ describe("Markdown Terminal Renderer", () => {
   });
 
   it("should wrap plain and ANSI lines cleanly without splitting words", () => {
-    const input = "This is a quick test of word wrapping in git-ingest terminal renderer";
+    const input = "This is a quick test of word wrapping in ingest terminal renderer";
     const wrapped = wrapAnsiLine(input, 25, "  ");
     assert.ok(wrapped.length > 1);
     for (const w of wrapped) {

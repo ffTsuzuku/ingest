@@ -1,11 +1,19 @@
 import { executeCommand } from "../utils/command.js";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ScheduleConfig, ScheduleStatus } from "./types.js";
 
-const CRON_START_TAG = "# BEGIN GIT-INGEST AUTOMATION";
-const CRON_END_TAG = "# END GIT-INGEST AUTOMATION";
+const CRON_START_TAG = "# BEGIN INGEST AUTOMATION";
+const CRON_END_TAG = "# END INGEST AUTOMATION";
+const LEGACY_CRON_START_TAG = "# BEGIN GIT-INGEST AUTOMATION";
+const LEGACY_CRON_END_TAG = "# END GIT-INGEST AUTOMATION";
 
 export class CronScheduler {
+  public static resolveEntrypoint(): string {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    return resolve(currentDir, "../index.js");
+  }
+
   public static async getCrontab(): Promise<string> {
     try {
       const res = await executeCommand("crontab", ["-l"]);
@@ -36,18 +44,24 @@ export class CronScheduler {
     const existing = await this.getCrontab();
     const cronExpr = this.buildCronExpression(config);
 
-    const projectRoot = resolve(process.cwd());
-    const configArg = config.configPath ? ` ${config.configPath}` : "";
-    const commandLine = `cd "${projectRoot}" && npx ts-node src/index.ts${configArg} >> /tmp/git-ingest-cron.log 2>&1`;
+    const workingDir = resolve(process.cwd());
+    const entrypoint = this.resolveEntrypoint();
+    const configArg = config.configPath ? ` "${config.configPath}"` : "";
+    const commandLine = `cd "${workingDir}" && "${process.execPath}" "${entrypoint}"${configArg} >> /tmp/ingest-cron.log 2>&1`;
 
     const managedBlock = `${CRON_START_TAG}\n${cronExpr} ${commandLine}\n${CRON_END_TAG}`;
 
-    let newContent = "";
-    if (existing.includes(CRON_START_TAG)) {
+    let newContent = existing;
+    if (newContent.includes(LEGACY_CRON_START_TAG)) {
+      const legacyRegex = new RegExp(`\\n?${LEGACY_CRON_START_TAG}[\\s\\S]*?${LEGACY_CRON_END_TAG}\\n?`, "g");
+      newContent = newContent.replace(legacyRegex, "");
+    }
+
+    if (newContent.includes(CRON_START_TAG)) {
       const regex = new RegExp(`${CRON_START_TAG}[\\s\\S]*?${CRON_END_TAG}`, "g");
-      newContent = existing.replace(regex, managedBlock);
+      newContent = newContent.replace(regex, managedBlock);
     } else {
-      newContent = existing.trim() ? `${existing.trim()}\n\n${managedBlock}\n` : `${managedBlock}\n`;
+      newContent = newContent.trim() ? `${newContent.trim()}\n\n${managedBlock}\n` : `${managedBlock}\n`;
     }
 
     await this.setCrontab(newContent);
@@ -55,10 +69,14 @@ export class CronScheduler {
 
   public static async uninstall(): Promise<void> {
     const existing = await this.getCrontab();
-    if (!existing.includes(CRON_START_TAG)) return;
+    if (!existing.includes(CRON_START_TAG) && !existing.includes(LEGACY_CRON_START_TAG)) return;
 
+    let updated = existing;
     const regex = new RegExp(`\\n?${CRON_START_TAG}[\\s\\S]*?${CRON_END_TAG}\\n?`, "g");
-    const updated = existing.replace(regex, "").trim();
+    updated = updated.replace(regex, "");
+
+    const legacyRegex = new RegExp(`\\n?${LEGACY_CRON_START_TAG}[\\s\\S]*?${LEGACY_CRON_END_TAG}\\n?`, "g");
+    updated = updated.replace(legacyRegex, "").trim();
 
     if (updated) {
       await this.setCrontab(updated + "\n");
@@ -82,10 +100,19 @@ export class CronScheduler {
         details: `Active Cron Job: ${line}`,
       };
     }
+    if (crontab.includes(LEGACY_CRON_START_TAG)) {
+      const match = crontab.match(new RegExp(`${LEGACY_CRON_START_TAG}\\n([\\s\\S]*?)\\n${LEGACY_CRON_END_TAG}`));
+      const line = match?.[1] || "";
+      return {
+        active: true,
+        type: "cron",
+        details: `Active Legacy Cron Job: ${line}`,
+      };
+    }
     return {
       active: false,
       type: "none",
-      details: "No active cron job found for git-ingest.",
+      details: "No active cron job found for ingest.",
     };
   }
 }

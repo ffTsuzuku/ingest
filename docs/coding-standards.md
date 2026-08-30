@@ -1,6 +1,6 @@
 # Coding Standards & Guidelines
 
-This document outlines the coding standards, TypeScript conventions, and quality practices for the `git-ingest` codebase.
+This document outlines the coding standards, TypeScript conventions, and quality practices for the `ingest` codebase.
 
 ## 1. Core Principles
 
@@ -75,5 +75,5 @@ src/
 When adding new features or modifying existing logic:
 1. Update `docs/architecture.md` if components or data flows change.
 2. Update `docs/extension-guide.md` when adding new providers or commands.
-3. Update `skills/git-ingest/SKILL.md` if new user-facing commands, flags, or configuration options are introduced.
+3. Update `skills/ingest/SKILL.md` if new user-facing commands, flags, or configuration options are introduced.
 4. Run `npm run verify-docs` to ensure documentation consistency.

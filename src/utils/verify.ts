@@ -12,7 +12,7 @@ export async function verifyDocsAndIntegrity(): Promise<boolean> {
     "docs/coding-standards.md",
     "docs/extension-guide.md",
     "docs/self-documentation.md",
-    "skills/git-ingest/SKILL.md",
+    "skills/ingest/SKILL.md",
     "src/index.ts",
   ];
 
@@ -33,9 +33,9 @@ export async function verifyDocsAndIntegrity(): Promise<boolean> {
 
   // Verify skill frontmatter
   try {
-    const skillContent = await readFile(join(root, "skills/git-ingest/SKILL.md"), "utf8");
-    if (!skillContent.startsWith("---") || !skillContent.includes("name: git-ingest")) {
-      console.error("  \x1b[31m✖ Invalid skill YAML frontmatter in skills/git-ingest/SKILL.md\x1b[0m");
+    const skillContent = await readFile(join(root, "skills/ingest/SKILL.md"), "utf8");
+    if (!skillContent.startsWith("---") || !skillContent.includes("name: ingest")) {
+      console.error("  \x1b[31m✖ Invalid skill YAML frontmatter in skills/ingest/SKILL.md\x1b[0m");
       allOk = false;
     } else {
       console.log("  \x1b[32m✔\x1b[0m Skill definition format valid");

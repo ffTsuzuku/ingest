@@ -67,7 +67,7 @@ export class InteractiveTUI {
         {
           label: "🤖 Install Global AI Agent Skill",
           value: "skill",
-          hint: "Deploy skill to ~/.gemini/config/skills/git-ingest/",
+          hint: "Deploy skill to ~/.gemini/config/skills/ingest/",
         },
         {
           label: "🩺 Test AI Provider Connection",
@@ -128,10 +128,10 @@ export class InteractiveTUI {
 
   private static printBanner(): void {
     const bannerLines = [
-      `${ANSI.bold}${ANSI.brightCyan}GIT-INGEST${ANSI.reset} ${ANSI.gray}- AI Daily Report Generator & Git Intelligence${ANSI.reset}`,
+      `${ANSI.bold}${ANSI.brightCyan}INGEST${ANSI.reset} ${ANSI.gray}- AI Daily Report Generator & Git Intelligence${ANSI.reset}`,
       `${ANSI.dim}Zero-Dependency TUI | Deep-Dive Diffs | Auto-Scheduler | Global AI Skill${ANSI.reset}`,
     ];
-    console.log(drawBox("⚡ git-ingest", bannerLines, 74).join("\n"));
+    console.log(drawBox("⚡ ingest", bannerLines, 74).join("\n"));
     console.log("");
   }
 
@@ -448,10 +448,10 @@ export class InteractiveTUI {
   private static async handleInstallSkill(): Promise<void> {
     console.log(`\n${ANSI.bold}${ANSI.yellow}=== Install Global AI Skill ===${ANSI.reset}\n`);
     const target = await promptSelect({
-      message: "Where would you like to install the git-ingest AI skill?",
+      message: "Where would you like to install the ingest AI skill?",
       choices: [
-        { label: "🌐 Global Agent Directory (~/.gemini/config/skills/git-ingest/)", value: "global" },
-        { label: "📁 Local Workspace Directory (.agents/skills/git-ingest/)", value: "workspace" },
+        { label: "🌐 Global Agent Directory (~/.gemini/config/skills/ingest/)", value: "global" },
+        { label: "📁 Local Workspace Directory (.agents/skills/ingest/)", value: "workspace" },
       ],
     });
 

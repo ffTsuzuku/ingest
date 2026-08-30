@@ -1,6 +1,6 @@
 # Extension & Contribution Guide
 
-This guide explains how to extend `git-ingest` with new AI providers, custom report formats, TUI screens, and scheduler engines.
+This guide explains how to extend `ingest` with new AI providers, custom report formats, TUI screens, and scheduler engines.
 
 ## 1. Adding a New AI Provider
 

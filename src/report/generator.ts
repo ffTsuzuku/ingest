@@ -40,7 +40,7 @@ export function generateEmptyReport(context: AnalysisContext): { markdown: strin
     branches: context.branches,
     dateStr: context.dateStr,
     generatedAt,
-    providerLabel: "git-ingest:none",
+    providerLabel: "ingest:none",
     commitCount: 0,
   };
 

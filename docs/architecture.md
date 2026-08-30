@@ -1,10 +1,10 @@
-# Git-Ingest Architecture Specification
+# Ingest Architecture Specification
 
-This document describes the architectural layers, module responsibilities, and data flows of `git-ingest`.
+This document describes the architectural layers, module responsibilities, and data flows of `ingest`.
 
 ## 1. System Overview
 
-`git-ingest` is an AI-first developer tool that inspects Git repository histories, performs multi-commit AI analysis, generates structured markdown reports, and offers an interactive zero-dependency terminal UI and automated scheduling suite.
+`ingest` is an AI-first developer tool that inspects Git repository histories, performs multi-commit AI analysis, generates structured markdown reports, and offers an interactive zero-dependency terminal UI and automated scheduling suite.
 
 ```mermaid
 graph TD
@@ -36,7 +36,7 @@ graph TD
 ### 2.1. `src/config/`
 - **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `ProviderConfig`, and `RawConfig`.
 - **`parser.ts`**: Pure zero-dependency JSONC parser supporting single-line `//`, block `/* ... */` comments, and trailing commas.
-- **`manager.ts`**: Loads configs from custom paths or `~/.config/git-ingest/config.jsonc`, initializes defaults if missing, validates fields, and supports persistent updates.
+- **`manager.ts`**: Loads configs from custom paths or `~/.config/ingest/config.jsonc`, initializes defaults if missing, validates fields, and supports persistent updates.
 
 ### 2.2. `src/git/`
 - **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, and lists local/remote branches.
@@ -58,11 +58,11 @@ graph TD
 
 ### 2.5. `src/scheduler/`
 - **`types.ts`**: Types for job configurations, frequency (daily, hourly, weekly, custom cron), and status.
-- **`cron.ts`**: Manages user crontab entries with managed block markers (`# BEGIN git-ingest` / `# END git-ingest`).
-- **`launchd.ts`**: Generates and manages macOS LaunchAgents (`~/Library/LaunchAgents/com.tsuzuku.git-ingest.plist`).
+- **`cron.ts`**: Manages user crontab entries with managed block markers (`# BEGIN INGEST` / `# END INGEST`).
+- **`launchd.ts`**: Generates and manages macOS LaunchAgents (`~/Library/LaunchAgents/com.tsuzuku.ingest.plist`).
 
 ### 2.6. `src/skill/`
-- **`installer.ts`**: Discovers and deploys the `git-ingest` AI skill into `~/.gemini/config/skills/git-ingest/` (or workspace `.agents/skills/`) so AI coding assistants can immediately assist users.
+- **`installer.ts`**: Discovers and deploys the `ingest` AI skill into `~/.gemini/config/skills/ingest/` (or workspace `.agents/skills/`) so AI coding assistants can immediately assist users.
 
 ### 2.7. `src/tui/`
 - **`ansi.ts`**: ANSI color codes, text formatting, line drawing, and cursor manipulation.

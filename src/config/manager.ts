@@ -5,8 +5,11 @@ import type { AppConfig, RawConfig, RepoConfig } from "./types.js";
 import { parseJsonc } from "./parser.js";
 import { Logger } from "../utils/logger.js";
 
-export const DEFAULT_CONFIG_DIR = join(homedir(), ".config", "git-ingest");
+import { existsSync } from "node:fs";
+
+export const DEFAULT_CONFIG_DIR = join(homedir(), ".config", "ingest");
 export const DEFAULT_CONFIG_PATH = join(DEFAULT_CONFIG_DIR, "config.jsonc");
+export const LEGACY_CONFIG_PATH = join(homedir(), ".config", "git-ingest", "config.jsonc");
 export const DEFAULT_OUTPUT_ROOT = join(homedir(), "reports");
 export const DEFAULT_ERROR_LOG = "error.log";
 export const DEFAULT_PROMPT =
@@ -32,7 +35,7 @@ export function resolveConfiguredPath(rawPath: string, basePath?: string): strin
 
 export class ConfigManager {
   public static getDefaultConfigContent(): string {
-    return `// git-ingest configuration
+    return `// ingest configuration
 {
   "repos": [
     // {
@@ -73,7 +76,10 @@ export class ConfigManager {
   }
 
   public static async load(customPath?: string): Promise<AppConfig> {
-    const rawPath = customPath || DEFAULT_CONFIG_PATH;
+    let rawPath = customPath || DEFAULT_CONFIG_PATH;
+    if (!customPath && !existsSync(DEFAULT_CONFIG_PATH) && existsSync(LEGACY_CONFIG_PATH)) {
+      rawPath = LEGACY_CONFIG_PATH;
+    }
     const resolvedConfigPath = resolveConfiguredPath(rawPath);
     const configDir = dirname(resolvedConfigPath);
 

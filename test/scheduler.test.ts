@@ -18,7 +18,7 @@ describe("Cron Scheduler", () => {
 describe("Launchd Scheduler", () => {
   it("should generate valid launchd plist XML with hour and minute", () => {
     const plist = LaunchdScheduler.generatePlist({ frequency: "daily", time: "04:15" });
-    assert.ok(plist.includes("<string>com.tsuzuku.git-ingest</string>"));
+    assert.ok(plist.includes("<string>com.tsuzuku.ingest</string>"));
     assert.ok(plist.includes("<integer>4</integer>"));
     assert.ok(plist.includes("<integer>15</integer>"));
   });

@@ -77,19 +77,19 @@ function parseCliArgs(args: string[]): ParsedArgs {
 
 function printHelp(): void {
   console.log(`
-${ANSI.bold}${ANSI.brightCyan}git-ingest${ANSI.reset} - AI Daily Report Generator & Git Activity Explorer
+${ANSI.bold}${ANSI.brightCyan}ingest${ANSI.reset} - AI Daily Report Generator & Git Activity Explorer
 
 ${ANSI.bold}USAGE:${ANSI.reset}
-  git-ingest                          Launch interactive TUI
-  git-ingest [config-path]            Run headless generation for all repos in config
-  git-ingest --repo <path>            Run report for a single repository
-  git-ingest --date <YYYY-MM-DD>      Generate report for a specific date
-  git-ingest --diff                   Enable Git diff deep-dive analysis
-  git-ingest --view <report.md>       View markdown report in terminal pager
-  git-ingest --install-skill          Deploy AI skill to ~/.gemini/config/skills/
-  git-ingest --schedule-install       Install automated daily scheduler (launchd / cron)
-  git-ingest --schedule-status        Check current scheduler status
-  git-ingest --schedule-remove        Remove automated schedules
+  ingest                          Launch interactive TUI
+  ingest [config-path]            Run headless generation for all repos in config
+  ingest --repo <path>            Run report for a single repository
+  ingest --date <YYYY-MM-DD>      Generate report for a specific date
+  ingest --diff                   Enable Git diff deep-dive analysis
+  ingest --view <report.md>       View markdown report in terminal pager
+  ingest --install-skill          Deploy AI skill to ~/.gemini/config/skills/ingest/
+  ingest --schedule-install       Install automated daily scheduler (launchd / cron)
+  ingest --schedule-status        Check current scheduler status
+  ingest --schedule-remove        Remove automated schedules
 
 ${ANSI.bold}OPTIONS:${ANSI.reset}
   -i, --interactive       Force interactive TUI mode
