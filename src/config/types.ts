@@ -11,6 +11,8 @@ export interface RepoConfig {
   report_style?: Nullable<ReportStyle>;
   diff_mode?: boolean;
   max_diff_lines?: number;
+  diff_ignore_patterns?: string[];
+  smart_diff_filter?: boolean;
 }
 
 export interface OpencodeProviderConfig {
@@ -81,10 +83,16 @@ export interface RawConfig {
   prompt?: string;
   report_style?: ReportStyle;
   date_format?: string;
+  diff_mode?: boolean;
+  max_diff_lines?: number;
+  diff_ignore_patterns?: string[];
+  smart_diff_filter?: boolean;
 }
 
 export interface LocalRepoConfig {
   path?: string;
+  diff_ignore_patterns?: string[];
+  smart_diff_filter?: boolean;
   repo_name?: Nullable<string>;
   branches?: string[];
   custom_prompt?: Nullable<string>;
@@ -113,6 +121,8 @@ export interface AppConfig {
   defaultProvider: string;
   prompt: string;
   reportStyle?: ReportStyle;
+  diffIgnorePatterns?: string[];
+  smartDiffFilter?: boolean;
   configPath: string;
 }
 

@@ -97,7 +97,10 @@ description: >-
       "branches": ["main", "dev"],
       "custom_prompt": null,
       "report_style": "system-centric", // "default" | "system-centric" | "changelog" | "security"
-      "diff_mode": true
+      "diff_mode": true,
+      "max_diff_lines": 200,
+      "diff_ignore_patterns": ["*.gen.ts", "fixtures/**"],
+      "smart_diff_filter": true
     }
   ],
   "output_root": "~/reports",
@@ -128,9 +131,18 @@ description: >-
   "report_style": "system-centric",
   "diff_mode": true,
   "max_diff_lines": 300,
+  "diff_ignore_patterns": ["generated/**", "mocks/**"],
+  "smart_diff_filter": true,
   "retention_days": 30
 }
 ```
+
+
+### Smart Diff Filtering & Signal Prioritization
+- **Noise Filtering**: Automatically ignores lockfiles (`package-lock.json`, `yarn.lock`, `Cargo.lock`, `go.sum`, etc.), build artifacts (`*.min.js`, `*.map`, `.tsbuildinfo`), snapshots (`*.snap`), and media/binary assets.
+- **Custom Patterns**: Configure `diff_ignore_patterns` in `.ingestrc` or `config.jsonc` for project-specific generated files.
+- **Toggle**: Disable built-in noise filtering via `"smart_diff_filter": false` if full raw diff context is required.
+- **Signal Prioritization**: When diffs are truncated to fit `max_diff_lines`, high-signal architecture manifests and core source files are prioritized over test fixtures, scripts, and localization.
 
 ## How to Assist Users
 

@@ -105,6 +105,8 @@ export async function mergeRepoWithLocalConfig(
   const report_style = matchingLocalRepo?.report_style ?? localConfig.report_style ?? repo.report_style ?? null;
   const diff_mode = matchingLocalRepo?.diff_mode ?? localConfig.diff_mode ?? repo.diff_mode;
   const max_diff_lines = matchingLocalRepo?.max_diff_lines ?? localConfig.max_diff_lines ?? repo.max_diff_lines;
+  const diff_ignore_patterns = matchingLocalRepo?.diff_ignore_patterns ?? localConfig.diff_ignore_patterns ?? repo.diff_ignore_patterns;
+  const smart_diff_filter = matchingLocalRepo?.smart_diff_filter ?? localConfig.smart_diff_filter ?? repo.smart_diff_filter ?? true;
 
   return {
     path: repo.path,
@@ -115,6 +117,8 @@ export async function mergeRepoWithLocalConfig(
     report_style,
     diff_mode,
     max_diff_lines,
+    diff_ignore_patterns,
+    smart_diff_filter,
   };
 }
 
@@ -130,6 +134,8 @@ export class ConfigManager {
 //   - branches: Target branches to monitor for commits
 //   - diff_mode: Enable git diff deep-dive stats & line changes (+/-)
 //   - max_diff_lines: Max patch lines per commit sent to AI context (default: 200)
+//   - diff_ignore_patterns: Custom glob or filename ignore patterns for diff extraction
+//   - smart_diff_filter: Automatically filter lockfiles, build artifacts & binary assets (default: true)
 //   - custom_prompt: Custom review instructions for this repo
 //   - report_style: Preset report layout ("default" | "system-centric" | "changelog" | "security")
 // • output_root: Destination directory for reports (<root>/<repo>/YYYY-MM-DD-summary.md)
@@ -241,8 +247,10 @@ export class ConfigManager {
         custom_prompt: repo.custom_prompt ?? null,
         custom_prompt_file: repo.custom_prompt_file ?? null,
         report_style: repo.report_style ?? null,
-        diff_mode: repo.diff_mode ?? true,
-        max_diff_lines: repo.max_diff_lines ?? 200,
+        diff_mode: repo.diff_mode ?? rawConfig.diff_mode ?? true,
+        max_diff_lines: repo.max_diff_lines ?? rawConfig.max_diff_lines ?? 200,
+        diff_ignore_patterns: repo.diff_ignore_patterns ?? localCwdConfig?.diff_ignore_patterns ?? rawConfig.diff_ignore_patterns,
+        smart_diff_filter: repo.smart_diff_filter ?? localCwdConfig?.smart_diff_filter ?? rawConfig.smart_diff_filter ?? true,
       };
     });
 
@@ -281,6 +289,8 @@ export class ConfigManager {
       defaultProvider,
       prompt,
       reportStyle,
+      diffIgnorePatterns: localCwdConfig?.diff_ignore_patterns ?? rawConfig.diff_ignore_patterns,
+      smartDiffFilter: localCwdConfig?.smart_diff_filter ?? rawConfig.smart_diff_filter ?? true,
       configPath: resolvedConfigPath,
     };
   }
@@ -297,6 +307,8 @@ export class ConfigManager {
         provider: config.providers,
         prompt: config.prompt,
         report_style: config.reportStyle,
+        diff_ignore_patterns: config.diffIgnorePatterns,
+        smart_diff_filter: config.smartDiffFilter,
       },
       null,
       2,

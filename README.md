@@ -104,6 +104,19 @@ ingest --schedule-remove
 
 ---
 
+
+### Smart Diff Filtering & Signal Prioritization
+
+`ingest` includes an intelligent diff noise filtering and prioritization engine:
+
+- **Automatic Noise Filtering (`smart_diff_filter: true` by default)**: Automatically strips out low-signal, high-churn files from AI prompts:
+  - **Lockfiles**: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `go.sum`, `composer.lock`, `Gemfile.lock`, `flake.lock`, `poetry.lock`, `Pipfile.lock`, `bun.lockb`, etc.
+  - **Build Artifacts & Metadata**: `*.min.js`, `*.min.css`, `*.bundle.js`, `*.map`, `*.d.ts.map`, `.tsbuildinfo`, etc.
+  - **Binary & Media Assets**: `*.png`, `*.jpg`, `*.webp`, `*.svg`, `*.mp4`, `*.wasm`, `*.pdf`, `*.zip`, `*.tar.gz`, etc.
+  - **Test Snapshots**: `*.snap`, `*.snapshot`, `*.snap.json`.
+- **Custom Ignore Patterns (`diff_ignore_patterns`)**: Specify glob or exact patterns in `.ingestrc` or global config (e.g. `["*.gen.ts", "fixtures/**"]`).
+- **Signal-Based Prioritization**: When diff output exceeds `max_diff_lines`, diff lines are prioritized by architectural value (Configuration Manifests & Workflows > Entrypoints > Core Source Code > API Specs > Documentation > Tests > Tooling Scripts > Styles > Fixtures > Localization).
+
 ## ⚙️ Configuration
 
 `ingest` supports a hierarchical configuration system:
@@ -122,7 +135,10 @@ ingest --schedule-remove
       "branches": ["main", "dev"],
       "custom_prompt": null,
       "report_style": "system-centric", // "default" | "system-centric" | "changelog" | "security"
-      "diff_mode": true
+      "diff_mode": true,
+      "max_diff_lines": 200,
+      "diff_ignore_patterns": ["*.gen.ts", "docs/auto/**"],
+      "smart_diff_filter": true
     }
   ],
   "output_root": "~/reports",
@@ -157,6 +173,8 @@ Place `.ingestrc` in the root of your project to specify repo-specific review ru
   "report_style": "system-centric",
   "diff_mode": true,
   "max_diff_lines": 300,
+  "diff_ignore_patterns": ["generated/**", "fixtures/*.json"],
+  "smart_diff_filter": true,
   "retention_days": 30
 }
 ```

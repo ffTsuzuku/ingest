@@ -260,7 +260,10 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
 
           let diffStat;
           if ((parsed.diffMode || effectiveRepo.diff_mode !== false) && commits.length > 0) {
-            diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines);
+            diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines, {
+              smartDiffFilter: effectiveRepo.smart_diff_filter,
+              diffIgnorePatterns: effectiveRepo.diff_ignore_patterns,
+            });
           }
 
           const analysisContext = {

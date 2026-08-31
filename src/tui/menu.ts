@@ -324,7 +324,10 @@ export class InteractiveTUI {
 
         let diffStat;
         if (diffDeepDive && commits.length > 0) {
-          diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines);
+          diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines, {
+            smartDiffFilter: effectiveRepo.smart_diff_filter,
+            diffIgnorePatterns: effectiveRepo.diff_ignore_patterns,
+          });
           if (diffStat) {
             console.log(`  Diff Stat: ${diffStat.filesChangedCount} files changed (+${diffStat.insertions}, -${diffStat.deletions}).`);
           }
