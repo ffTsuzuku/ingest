@@ -19,7 +19,7 @@ description: >-
      ingest --init
      ingest --init --quick
      ```
-   - Features arrow-key navigation, interactive date selectors, markdown report explorer with terminal pager, and scheduler setup.
+   - Features real-time AI agent/harness discovery (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, or custom), arrow-key navigation, interactive date selectors, markdown report explorer with terminal pager, and scheduler setup.
 
 2. **Headless Batch Generation**:
    - Generate reports for all configured repositories:

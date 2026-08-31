@@ -46,12 +46,19 @@ graph TD
 
 ### 2.3. `src/ai/`
 - **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, `AnalysisResult`, and `TokenUsage`.
+- **`discovery.ts`**: Dynamic agent harness registry and real-time PATH probing engine (`HarnessDiscovery`). Automatically detects available CLI tools (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, `gh copilot`) with status badges and smart defaults.
 - **`tokens.ts`**: Token parsing and formatting utility. Parses exact token metadata from report footers and formats token counts with `N/A` fallback for unrecorded reports.
 - **`repair.ts`**: AI-powered Mermaid syntax repair and healing engine. Fixes unquoted node labels, illegal node IDs, broken connector arrows, and converts unformatted architecture blocks into valid `flowchart TD` diagrams.
 - **`prompt.ts`**: Generates high-fidelity structured prompts with multi-style layout engines (`buildStandardAnalysisPrompt`, `buildSystemCentricPrompt`). Implements progressive disclosure (30-second summary, 5-minute briefing with codebase map, causal Problem->Change->Result breakdowns, behavior changes table, and commit appendix).
 - **`antigravity.ts`**: Primary provider adapter for Antigravity CLI (`agy --print --output-format json --dangerously-skip-permissions`).
+- **`claude.ts`**: Provider adapter for Anthropic Claude Code CLI (`claude -p`).
+- **`codex.ts`**: Provider adapter for OpenAI Codex CLI (`codex exec`).
+- **`pi.ts`**: Provider adapter for Pi Minimalist Coding Agent (`pi -p`).
 - **`opencode.ts`**: Provider adapter for Opencode CLI / local OpenAI-compatible endpoints.
+- **`ollama.ts`**: Provider adapter for Ollama local LLM runner (`ollama run`).
+- **`aider.ts`**: Provider adapter for Aider pair programming assistant (`aider --message`).
 - **`gemini-cli.ts`**: Provider adapter alias for backward compatibility.
+- **`custom.ts`**: Provider adapter for custom user-defined commands and executable harnesses.
 - **`factory.ts`**: Instantiates and selects the appropriate provider based on active configuration.
 
 ### 2.4. `src/report/`

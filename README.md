@@ -12,9 +12,8 @@
 - ⚡ **Token Usage Tracking**: Accurately tracks exact model prompt and completion tokens directly via provider session metrics (such as `agy --output-format json`), embedding token counts directly into report footers, Web UI badges, and CLI logs (with `N/A` fallback for unrecorded reports).
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
 - ⏰ **Automated Schedulers (macOS LaunchAgent + Linux Cron)**: Install, manage, test, and inspect recurring daily report jobs seamlessly.
-- 🤖 **Global AI Skill Deployment**: Installs standard AI skill files (`skills/ingest/SKILL.md`) to `~/.gemini/config/skills/ingest/` so AI assistants can directly assist users.
-- 🧹 **Report Expiration & Auto-Cleanup**: Configurable retention window (default 30 days) automatically prunes older markdown reports during generation or via manual pruning (`--clean-expired`).
-- ⚙️ **JSONC Configuration**: Clean configuration with comment support, custom prompt templates per repo, and support for Antigravity CLI, Opencode CLI, and Gemini CLI.
+- 🤖 **Dynamic AI Agent & Harness Discovery**: Automatically probes the environment for installed agent harnesses (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, or custom commands) with real-time `[Detected ✔]` status badges and automatic pre-selection in setup wizards.
+- ⚙️ **JSONC Configuration**: Clean configuration with comment support, custom prompt templates per repo, and support for Antigravity, Claude Code, Codex, Pi, Opencode, Gemini, Ollama, Aider, and custom CLI harnesses.
 
 ---
 

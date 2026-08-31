@@ -18,6 +18,7 @@ import { renderScheduleStatusBox } from "../scheduler/status.js";
 import { SkillInstaller } from "../skill/installer.js";
 import { ConfigInitWizard } from "../config/init.js";
 import { IngestWebServer } from "../server/server.js";
+import { HarnessDiscovery } from "../ai/discovery.js";
 import { Logger } from "../utils/logger.js";
 
 export interface MenuContext {
@@ -610,21 +611,26 @@ export class InteractiveTUI {
           Logger.success("Default prompt updated.");
         }
       } else if (action === "switch_provider") {
-        const newProvider = await promptSelect<"antigravity" | "opencode" | "gemini-cli">({
-          message: "Select default AI provider:",
-          choices: [
-            { label: " Antigravity CLI (agy)", value: "antigravity" },
-            { label: " Opencode CLI (Local/OpenAI)", value: "opencode" },
-            { label: " Gemini CLI", value: "gemini-cli" },
-            { label: " Back", value: "back" as any },
-          ],
+        const discovered = await HarnessDiscovery.discoverAll();
+        const choices = HarnessDiscovery.buildMenuChoices(discovered, ctx.config.defaultProvider);
+        choices.push({
+          label: " Back",
+          value: "back",
+          hint: "",
+          selected: false,
         });
-        if (newProvider && (newProvider as string) !== "back") {
+
+        const newProvider = await promptSelect<string>({
+          message: "Select default AI provider / agent harness:",
+          choices,
+        });
+        if (newProvider && newProvider !== "back") {
           ctx.config.defaultProvider = newProvider;
           await ConfigManager.save(ctx.config);
           Logger.success(`Default AI provider set to "${newProvider}".`);
         }
       }
+
     }
   }
 

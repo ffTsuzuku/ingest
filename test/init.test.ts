@@ -35,6 +35,7 @@ describe("Configuration Init Wizard", () => {
       assert.equal(parsed.diff_mode, true);
       assert.equal(parsed.max_diff_lines, 200);
       assert.equal(parsed.retention_days, 30);
+      assert.equal(parsed.output_root, undefined);
       assert.ok(Array.isArray(parsed.branches));
       assert.ok(parsed.prompt && parsed.prompt.length > 0);
     } finally {
@@ -60,6 +61,7 @@ describe("Configuration Init Wizard", () => {
       assert.ok(parsed);
       assert.equal(parsed.default_provider, "antigravity");
       assert.equal(parsed.retention_days, 30);
+      assert.equal(parsed.output_root, undefined);
       assert.ok(parsed.branches && parsed.branches.length > 0);
     } finally {
       await rm(tempDir, { recursive: true, force: true });

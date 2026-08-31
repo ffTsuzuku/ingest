@@ -26,11 +26,48 @@ export interface AntigravityProviderConfig {
   effort?: "low" | "medium" | "high";
 }
 
+export interface ClaudeProviderConfig {
+  model?: string;
+}
+
+export interface CodexProviderConfig {
+  model?: string;
+  ephemeral?: boolean;
+}
+
+export interface PiProviderConfig {
+  model?: string;
+  provider?: string;
+}
+
+export interface OllamaProviderConfig {
+  model?: string;
+  endpoint?: string;
+}
+
+export interface AiderProviderConfig {
+  model?: string;
+}
+
+export interface CustomProviderConfig {
+  command: string;
+  args?: string[];
+  check_args?: string[];
+  api_key_env?: Nullable<string>;
+}
+
 export interface ProviderConfigMap {
   antigravity?: AntigravityProviderConfig;
   agy?: AntigravityProviderConfig;
   opencode?: OpencodeProviderConfig;
   "gemini-cli"?: AntigravityProviderConfig;
+  claude?: ClaudeProviderConfig;
+  codex?: CodexProviderConfig;
+  pi?: PiProviderConfig;
+  ollama?: OllamaProviderConfig;
+  aider?: AiderProviderConfig;
+  custom?: CustomProviderConfig;
+  [key: string]: any;
 }
 
 export interface RawConfig {
@@ -40,7 +77,7 @@ export interface RawConfig {
   error_log?: string;
   provider?: ProviderConfigMap;
   agents?: ProviderConfigMap;
-  default_provider?: "antigravity" | "opencode" | "gemini-cli" | "agy";
+  default_provider?: string;
   prompt?: string;
   report_style?: ReportStyle;
   date_format?: string;
@@ -60,7 +97,7 @@ export interface LocalRepoConfig {
   error_log?: string;
   provider?: ProviderConfigMap;
   agents?: ProviderConfigMap;
-  default_provider?: "antigravity" | "opencode" | "gemini-cli" | "agy";
+  default_provider?: string;
   prompt?: string;
   date_format?: string;
   repos?: RepoConfig[];
@@ -73,7 +110,7 @@ export interface AppConfig {
   retentionDays: number;
   errorLogPath: string;
   providers: ProviderConfigMap;
-  defaultProvider: "antigravity" | "opencode" | "gemini-cli" | "agy";
+  defaultProvider: string;
   prompt: string;
   reportStyle?: ReportStyle;
   configPath: string;

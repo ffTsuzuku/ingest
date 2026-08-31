@@ -9,6 +9,7 @@ import { LaunchdScheduler } from "../scheduler/launchd.js";
 import { CronScheduler } from "../scheduler/cron.js";
 import { DEFAULT_CONFIG_PATH, DEFAULT_OUTPUT_ROOT, DEFAULT_PROMPT, resolveConfiguredPath } from "./manager.js";
 import { SYSTEM_CENTRIC_PROMPT, CHANGELOG_PROMPT, SECURITY_PROMPT } from "../ai/prompt.js";
+import { HarnessDiscovery } from "../ai/discovery.js";
 import { Logger } from "../utils/logger.js";
 
 export interface InitWizardOptions {
@@ -140,6 +141,8 @@ export class ConfigInitWizard {
   }
 
   private static async runQuickInit(cwd: string, isLocal: boolean, isInsideGit: boolean): Promise<string | null> {
+    const defaultProvider = await HarnessDiscovery.getDetectedDefault();
+
     if (isLocal) {
       const repoPath = isInsideGit ? await resolveRepoPath(cwd) : cwd;
       const repoName = isInsideGit ? await getRepoName(repoPath) : basename(cwd);
@@ -168,7 +171,7 @@ export class ConfigInitWizard {
 // • diff_mode: When true, extracts git diff stats & line changes (+/-)
 // • max_diff_lines: Max patch lines per commit sent to AI context
 // • retention_days: Report retention expiration in days (default: 30, 0 = keep forever)
-// • default_provider: "antigravity" | "opencode" | "gemini-cli"
+// • default_provider: Auto-detected or configured AI backend
 // • prompt: System prompt instructions guiding AI summary generation
 {
   "repo_name": "${repoName}",
@@ -176,7 +179,7 @@ export class ConfigInitWizard {
   "diff_mode": true,
   "max_diff_lines": 200,
   "retention_days": 30,
-  "default_provider": "antigravity",
+  "default_provider": "${defaultProvider}",
   "prompt": "${DEFAULT_PROMPT}"
 }
 `;
@@ -225,7 +228,7 @@ export class ConfigInitWizard {
 // • output_root: Destination folder for markdown reports (<root>/<repo>/YYYY-MM-DD-summary.md)
 // • retention_days: Automatic report retention period in days (default: 30, 0 = keep forever)
 // • error_log: Path for recording non-fatal error traces (default: error.log)
-// • default_provider: Default AI backend ("antigravity" | "opencode" | "gemini-cli")
+// • default_provider: Default AI backend ("antigravity" | "claude" | "codex" | "pi" | "opencode" | etc.)
 // • provider: Custom provider configs (endpoints, model overrides, tokens)
 // • prompt: Default engineering analysis prompt template
 {
@@ -233,7 +236,7 @@ export class ConfigInitWizard {
   "output_root": "~/reports",
   "retention_days": 30,
   "error_log": "error.log",
-  "default_provider": "antigravity",
+  "default_provider": "${defaultProvider}",
   "provider": {
     "antigravity": {
       "dangerously_skip_permissions": true
@@ -255,40 +258,33 @@ export class ConfigInitWizard {
   private static async runGuidedInit(cwd: string, isLocal: boolean, isInsideGit: boolean): Promise<string | null> {
     console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 1: AI Provider Selection (default_provider) ──${ANSI.reset}`);
     console.log(
-      `  ${ANSI.dim}Ingest uses an AI backend to synthesize git commit histories, diff stats, and patch logs.${ANSI.reset}\n`,
+      `  ${ANSI.dim}Ingest dynamically probes your environment for installed AI agent harnesses and CLI tools.${ANSI.reset}\n`,
     );
-    console.log(`  ${ANSI.bold}AI Provider Options & Behavior:${ANSI.reset}`);
-    console.log(`  ${ANSI.yellow}• Antigravity / AGY CLI:${ANSI.reset}     Zero setup! Connects directly to active Google Antigravity session.`);
-    console.log(`                                 Headless-ready (auto-approves read permissions).`);
-    console.log(`  ${ANSI.green}• Opencode / Custom API:${ANSI.reset}     Connects to any OpenAI-compatible HTTP completions endpoint`);
-    console.log(`                                 (Ollama, LM Studio, vLLM, DeepSeek, OpenAI, etc.).`);
-    console.log(`  ${ANSI.blue}• Gemini CLI:${ANSI.reset}                Invokes standard 'gemini' command line tool adapter.\n`);
 
+    const discovered = await HarnessDiscovery.discoverAll();
+    const availableCount = discovered.filter((d) => d.available).length;
+    if (availableCount > 0) {
+      console.log(`  ${ANSI.bold}${ANSI.green}✔ Detected ${availableCount} available harness(es) in PATH:${ANSI.reset}`);
+      for (const h of discovered.filter((d) => d.available)) {
+        const verStr = h.version ? ` (${h.version})` : "";
+        console.log(`    ${ANSI.green}• ${h.name}${verStr}:${ANSI.reset} ${ANSI.dim}${h.description}${ANSI.reset}`);
+      }
+      console.log("");
+    } else {
+      console.log(`  ${ANSI.bold}${ANSI.yellow}⚠ No supported CLI harnesses detected in PATH. Select an option to configure or install.${ANSI.reset}\n`);
+    }
+
+    const providerChoices = HarnessDiscovery.buildMenuChoices(discovered);
     const providerChoice = await promptSelect({
-      message: "Choose your default AI provider:",
-      choices: [
-        {
-          label: "✨ Antigravity / AGY CLI (Recommended)",
-          value: "antigravity",
-          hint: "Zero API token setup required. Uses active Google Antigravity session.",
-        },
-        {
-          label: "🤖 Opencode / OpenAI-compatible endpoint",
-          value: "opencode",
-          hint: "Custom endpoint (e.g. Ollama, LM Studio, vLLM, OpenAI, DeepSeek)",
-        },
-        {
-          label: "♊ Gemini CLI",
-          value: "gemini-cli",
-          hint: "Standard Gemini CLI tool adapter",
-        },
-      ],
+      message: "Choose your default AI provider / harness:",
+      choices: providerChoices,
     });
 
     if (!providerChoice) return null;
 
     let opencodeModel = "qwen-max";
     let opencodeEndpoint = "http://localhost:1234/v1/chat/completions";
+    let providerConfigObj: Record<string, unknown> = {};
 
     if (providerChoice === "opencode") {
       console.log(`  ${ANSI.dim}Model name for completions (e.g. qwen-max, gpt-4o, deepseek-chat, llama3.3).${ANSI.reset}`);
@@ -306,7 +302,88 @@ export class ConfigInitWizard {
       });
       if (endpointInput === null) return null;
       opencodeEndpoint = endpointInput.trim() || "http://localhost:1234/v1/chat/completions";
+      providerConfigObj = {
+        opencode: {
+          model: opencodeModel,
+          endpoint: opencodeEndpoint,
+          api_key_env: null,
+        },
+      };
+    } else if (providerChoice === "ollama") {
+      const modelInput = await promptText({
+        message: "Ollama model name (e.g. llama3.2, qwen2.5-coder, mistral):",
+        defaultValue: "llama3.2",
+      });
+      if (modelInput === null) return null;
+      const model = modelInput.trim() || "llama3.2";
+      providerConfigObj = {
+        ollama: { model },
+      };
+    } else if (providerChoice === "claude") {
+      const modelInput = await promptText({
+        message: "Claude model override (leave empty for default Claude Code model):",
+        defaultValue: "",
+      });
+      if (modelInput === null) return null;
+      const model = modelInput.trim();
+      if (model) {
+        providerConfigObj = { claude: { model } };
+      }
+    } else if (providerChoice === "codex") {
+      const modelInput = await promptText({
+        message: "Codex model override (leave empty for default):",
+        defaultValue: "",
+      });
+      if (modelInput === null) return null;
+      const model = modelInput.trim();
+      providerConfigObj = {
+        codex: model ? { model, ephemeral: true } : { ephemeral: true },
+      };
+    } else if (providerChoice === "pi") {
+      const modelInput = await promptText({
+        message: "Pi model override (leave empty for default Pi model):",
+        defaultValue: "",
+      });
+      if (modelInput === null) return null;
+      const model = modelInput.trim();
+      if (model) {
+        providerConfigObj = { pi: { model } };
+      }
+    } else if (providerChoice === "aider") {
+      const modelInput = await promptText({
+        message: "Aider model override (leave empty for default Aider model):",
+        defaultValue: "",
+      });
+      if (modelInput === null) return null;
+      const model = modelInput.trim();
+      if (model) {
+        providerConfigObj = { aider: { model } };
+      }
+    } else if (providerChoice === "custom") {
+      const commandInput = await promptText({
+        message: "Custom CLI command or binary name:",
+        defaultValue: "my-agent",
+      });
+      if (!commandInput) return null;
+      const argsInput = await promptText({
+        message: "Command arguments before prompt (space-separated, optional):",
+        defaultValue: "",
+      });
+      const args = argsInput ? argsInput.trim().split(" ").filter(Boolean) : [];
+      providerConfigObj = {
+        custom: {
+          command: commandInput.trim(),
+          args,
+        },
+      };
+    } else if (providerChoice === "antigravity" || providerChoice === "agy" || providerChoice === "gemini-cli") {
+      providerConfigObj = {
+        antigravity: {
+          dangerously_skip_permissions: true,
+        },
+      };
     }
+
 
     console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 2: Git Branches & Diff Analytics (branches, diff_mode, max_diff_lines) ──${ANSI.reset}`);
     console.log(
@@ -412,23 +489,32 @@ export class ConfigInitWizard {
       selectedStyle = "default";
     }
 
-    console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 4: Report Storage & Expiration (output_root, retention_days, error_log) ──${ANSI.reset}`);
-    console.log(
-      `  ${ANSI.dim}Specify where generated Markdown summaries are stored and how long they are retained.${ANSI.reset}\n`,
-    );
-    console.log(`  ${ANSI.bold}Storage & Retention Settings:${ANSI.reset}`);
-    console.log(`  ${ANSI.yellow}• Daily Reports:${ANSI.reset}   ${ANSI.cyan}<output_root>/<repo_name>/YYYY-MM-DD-summary.md${ANSI.reset}`);
-    console.log(`  ${ANSI.green}• Date Ranges:${ANSI.reset}     ${ANSI.cyan}<output_root>/<repo_name>/YYYY-MM-DD-to-YYYY-MM-DD-summary.md${ANSI.reset}`);
-    console.log(`  ${ANSI.blue}• Expiration:${ANSI.reset}      Automatically prune reports older than N days (default: 30, 0 = keep forever).\n`);
+    let outputRoot = "~/reports";
+    if (!isLocal) {
+      console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 4: Report Storage & Expiration (output_root, retention_days, error_log) ──${ANSI.reset}`);
+      console.log(
+        `  ${ANSI.dim}Specify where generated Markdown summaries are stored and how long they are retained.${ANSI.reset}\n`,
+      );
+      console.log(`  ${ANSI.bold}Storage & Retention Settings:${ANSI.reset}`);
+      console.log(`  ${ANSI.yellow}• Daily Reports:${ANSI.reset}   ${ANSI.cyan}<output_root>/<repo_name>/YYYY-MM-DD-summary.md${ANSI.reset}`);
+      console.log(`  ${ANSI.green}• Date Ranges:${ANSI.reset}     ${ANSI.cyan}<output_root>/<repo_name>/YYYY-MM-DD-to-YYYY-MM-DD-summary.md${ANSI.reset}`);
+      console.log(`  ${ANSI.blue}• Expiration:${ANSI.reset}      Automatically prune reports older than N days (default: 30, 0 = keep forever).\n`);
 
-    const defaultOutput = isLocal ? "./reports" : "~/reports";
-    const outputInput = await promptText({
-      message: "Report output directory (output_root):",
-      defaultValue: defaultOutput,
-      completer: "dir",
-    });
-    if (outputInput === null) return null;
-    const outputRoot = outputInput.trim() || defaultOutput;
+      const outputInput = await promptText({
+        message: "Report output directory (output_root):",
+        defaultValue: "~/reports",
+        completer: "dir",
+      });
+      if (outputInput === null) return null;
+      outputRoot = outputInput.trim() || "~/reports";
+    } else {
+      console.log(`\n${ANSI.bold}${ANSI.cyan}── Step 4: Report Retention & Expiration (retention_days) ──${ANSI.reset}`);
+      console.log(
+        `  ${ANSI.dim}Specify how long generated Markdown summaries are retained before automatic cleanup.${ANSI.reset}\n`,
+      );
+      console.log(`  ${ANSI.bold}Storage Location:${ANSI.reset} Reports are centrally stored in your global output directory (default: ~/reports/<repo_name>/).`);
+      console.log(`  ${ANSI.blue}• Expiration:${ANSI.reset}     Automatically prune reports older than N days (default: 30, 0 = keep forever).\n`);
+    }
 
     const retentionInput = await promptText({
       message: "Report retention period in days (retention_days, 0 = keep forever):",
@@ -505,17 +591,8 @@ export class ConfigInitWizard {
         report_style: selectedStyle,
       };
 
-      if (outputRoot !== "./reports" && outputRoot !== "~/reports") {
-        configObj.output_root = outputRoot;
-      }
-
-      if (providerChoice === "opencode") {
-        configObj.provider = {
-          opencode: {
-            model: opencodeModel,
-            endpoint: opencodeEndpoint,
-          },
-        };
+      if (Object.keys(providerConfigObj).length > 0) {
+        configObj.provider = providerConfigObj;
       }
 
       const content = `// Ingest Local Repository Configuration (.ingestrc)
@@ -527,7 +604,7 @@ export class ConfigInitWizard {
 // • diff_mode: When true, extracts git diff stats & line changes (+/-)
 // • max_diff_lines: Max patch lines per commit sent to AI context
 // • retention_days: Report retention expiration in days (default: 30, 0 = keep forever)
-// • default_provider: "antigravity" | "opencode" | "gemini-cli"
+// • default_provider: Default AI provider / agent harness
 // • prompt: System prompt instructions guiding AI summary generation
 // • report_style: "default" | "system-centric" | "changelog" | "security"
 ${JSON.stringify(configObj, null, 2)}
@@ -581,6 +658,7 @@ ${JSON.stringify(configObj, null, 2)}
           endpoint: opencodeEndpoint,
           api_key_env: null,
         },
+        ...providerConfigObj,
       },
       prompt: finalPrompt,
       report_style: selectedStyle,
