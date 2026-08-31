@@ -40,7 +40,17 @@ description: >-
      ```
    - Automatically tracks exact model prompt and completion tokens in generated reports (with N/A fallback when unrecorded).
 
-3. **Web Browser Report Explorer & Dashboard**:
+3. **Git Revision & Branch Comparison**:
+   - Compare arbitrary Git branches, tags, or commit revisions without temporal filtering:
+     ```bash
+     ingest --compare main..feature
+     ingest --compare origin/main...HEAD
+     ingest --compare v1.0.0..v2.0.0
+     ingest --repo /path/to/repo --compare main..feature
+     ```
+   - Extracts commit ranges, diff statistics, and patch excerpts between the two references to generate structured comparison reports.
+
+4. **Web Browser Report Explorer & Dashboard**:
    - Serve an interactive web dashboard across all repositories in the centralized report store:
      ```bash
      ingest --ui
@@ -49,7 +59,7 @@ description: >-
      ```
    - Features live token badges (`⚡ 14.1k tokens` / `⚡ Tokens: N/A`), timeline switcher, and one-click AI Mermaid syntax repair (`✨ Fix Diagrams`).
 
-4. **Terminal Markdown Viewer & Diagram Repair**:
+5. **Terminal Markdown Viewer & Diagram Repair**:
    - View generated markdown reports directly in the terminal with ANSI styling, responsive table wrapping, and 2D Unicode Mermaid diagrams:
      ```bash
      ingest --view /path/to/report.md
@@ -60,7 +70,7 @@ description: >-
      ```
    - In the pager, press `m` to toggle Mermaid rendering between **2D Connected Box Flowcharts** and **Structured Component & Flow Lists**.
 
-5. **Report Expiration & Maintenance**:
+6. **Report Expiration & Maintenance**:
    - Prune expired reports based on configured retention period (default: 30 days):
      ```bash
      ingest clean
@@ -68,7 +78,7 @@ description: >-
      ingest --clean
      ```
 
-6. **Automated Scheduling (macOS launchd & Linux Cron)**:
+7. **Automated Scheduling (macOS launchd & Linux Cron)**:
    - Install or view automated daily schedule (with optional automatic expiration):
      ```bash
      ingest --schedule-install --time 00:00
@@ -78,7 +88,7 @@ description: >-
      ingest --schedule-remove
      ```
 
-7. **Global Skill Installer**:
+8. **Global Skill Installer**:
    - Install or update this AI skill into the user's global agent directory:
      ```bash
      ingest --install-skill

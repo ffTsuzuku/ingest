@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { ConfigManager } from "./config/manager.js";
 import { InteractiveTUI } from "./tui/menu.js";
 import { isGitRepo, resolveRepoPath, getGitBranches, getRepoName } from "./git/runner.js";
-import { fetchRepoCommits, resolveDateFilter } from "./git/log.js";
-import { fetchDiffStat } from "./git/diff.js";
+import { fetchRepoCommits, resolveDateFilter, getCommitsBetweenRefs, parseCompareRange } from "./git/log.js";
+import { fetchDiffStat, fetchDiffStatBetweenRefs } from "./git/diff.js";
 import { AIFactory } from "./ai/factory.js";
 import { resolveRepoPrompt } from "./ai/prompt.js";
 import { formatReportMarkdown, generateEmptyReport } from "./report/generator.js";
@@ -27,6 +27,7 @@ interface ParsedArgs {
   retentionDays?: number;
   cleanExpired?: boolean;
   repoPath?: string;
+  compare?: string;
   dateStr?: string;
   sinceStr?: string;
   untilStr?: string;
@@ -96,6 +97,8 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.configPath = args[++i];
     } else if (arg === "--output-root" && i + 1 < args.length) {
       result.outputRoot = args[++i];
+    } else if ((arg === "--compare" || arg === "-c") && i + 1 < args.length) {
+      result.compare = args[++i];
     } else if (arg === "--repo" && i + 1 < args.length) {
       result.repoPath = args[++i];
     } else if (arg === "--date" && i + 1 < args.length) {
@@ -153,6 +156,7 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --date <YYYY-MM-DD>          Generate report for a specific date
   ingest --date <start>..<end>        Generate report for a date range (e.g. 2026-08-01..2026-08-07)
   ingest --since <date> --until <date> Generate report for a custom date range
+  ingest --compare <base>..<target>   Compare Git refs/branches/tags (e.g. main..feature)
   ingest --diff                       Enable Git diff deep-dive analysis
   ingest --clean                      Prune expired reports past retention period
   ingest --view <report.md>           View markdown report in terminal pager
@@ -183,6 +187,7 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   --since <date>              Start date for commit history
   --until <date>              End date for commit history
   --range <start..end>        Date range alias
+  -c, --compare <base..target> Compare commits and diffs between two Git references
   --style <style>             Report format preset ("system-centric" | "default" | "changelog" | "security")
   --time <HH:MM>              Scheduled run time (default: 00:00)
   -h, --help                  Show this help message
@@ -233,6 +238,85 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   }
 
   Logger.info(`Processing ${targetRepos.length} repository(ies)...`);
+
+  if (parsed.compare) {
+    const { baseRef, targetRef, range } = parseCompareRange(parsed.compare);
+    const compareDateStr = `compare-${range.replace(/[/:\\]/g, "-")}`;
+
+    for (const repo of targetRepos) {
+      try {
+        const repoPath = await resolveRepoPath(repo.path);
+        const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
+        const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
+
+        console.log(`\n\x1b[1mComparing:[0m \x1b[36m${repoName}\x1b[0m (${repoPath}) [\x1b[35m${range}\x1b[0m]`);
+
+        const activePrompt = await resolveRepoPrompt(
+          config.prompt,
+          effectiveRepo.custom_prompt,
+          effectiveRepo.custom_prompt_file,
+          repoPath,
+        );
+
+        const effectiveStyle = parsed.reportStyle || effectiveRepo.report_style || config.reportStyle || "default";
+
+        const commits = await getCommitsBetweenRefs(repoPath, baseRef, targetRef);
+        Logger.info(`Found ${commits.length} commits between ${baseRef} and ${targetRef}.`);
+
+        let diffStat;
+        if (parsed.diffMode || effectiveRepo.diff_mode !== false) {
+          diffStat = await fetchDiffStatBetweenRefs(repoPath, baseRef, targetRef, effectiveRepo.max_diff_lines);
+        }
+
+        const analysisContext = {
+          repoName,
+          repoPath,
+          branches: [range],
+          branch: range,
+          dateStr: compareDateStr,
+          commits,
+          diffStat,
+          customPrompt: activePrompt,
+          basePrompt: config.prompt,
+          reportStyle: effectiveStyle,
+        };
+
+        let reportMarkdown = "";
+        let reportMeta;
+
+        if (commits.length === 0 && (!diffStat || diffStat.filesChangedCount === 0)) {
+          Logger.info(`No commits or diffs found between ${baseRef} and ${targetRef} for ${repoName}. Generating empty report.`);
+          const res = generateEmptyReport(analysisContext);
+          reportMarkdown = res.markdown;
+          reportMeta = res.meta;
+        } else {
+          Logger.info(`Calling AI provider (${config.defaultProvider})...`);
+          const provider = AIFactory.getProvider(config);
+          const aiResult = await provider.analyze(analysisContext);
+          const res = formatReportMarkdown(analysisContext, aiResult);
+          reportMarkdown = res.markdown;
+          reportMeta = res.meta;
+        }
+
+        const saved = await ReportStorage.saveReport(config.outputRoot, reportMeta, reportMarkdown);
+        const tokenInfo = reportMeta?.tokenUsage?.totalTokens
+          ? ` (${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
+          : "";
+        Logger.success(`Comparison report for [${range}] written to ${saved.filePath}${tokenInfo}`);
+      } catch (err) {
+        await Logger.error(`Failed to generate comparison report for ${repo.path}`, err);
+      }
+    }
+
+    if (config.retentionDays > 0) {
+      const deleted = await ReportStorage.cleanExpiredReports(config.outputRoot, config.retentionDays);
+      if (deleted.length > 0) {
+        Logger.info(`Cleaned up ${deleted.length} expired report(s) (> ${config.retentionDays} days old).`);
+      }
+    }
+    return;
+  }
+
 
   for (const repo of targetRepos) {
     try {

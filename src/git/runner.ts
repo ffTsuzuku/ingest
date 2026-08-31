@@ -1,3 +1,4 @@
+export { getCommitsBetweenRefs, parseCompareRange } from "./log.js";
 import { stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { expandHome } from "../config/manager.js";
