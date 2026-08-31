@@ -27,11 +27,29 @@ export interface AnalysisResult {
   tokenUsage?: TokenUsage;
 }
 
+export interface RepoRollupActivity {
+  repoName: string;
+  repoPath: string;
+  branches: string[];
+  commits: CommitRecord[];
+  diffStat?: DiffStat;
+}
+
+export interface MultiRepoRollupContext {
+  workspaceName?: string;
+  dateStr: string;
+  repos: RepoRollupActivity[];
+  basePrompt: string;
+  customPrompt?: string | null;
+  reportStyle?: ReportStyle;
+}
+
 export interface AIProvider {
   readonly id: string;
   readonly name: string;
   isAvailable(): Promise<boolean>;
   analyze(context: AnalysisContext): Promise<AnalysisResult>;
   generate?(prompt: string, cwd?: string): Promise<string>;
+  analyzeMultiRepo?(context: MultiRepoRollupContext): Promise<AnalysisResult>;
 }
 

@@ -8,7 +8,10 @@ import { fetchRepoCommits, resolveDateFilter } from "./git/log.js";
 import { fetchDiffStat } from "./git/diff.js";
 import { AIFactory } from "./ai/factory.js";
 import { resolveRepoPrompt } from "./ai/prompt.js";
-import { formatReportMarkdown, generateEmptyReport } from "./report/generator.js";
+import { formatReportMarkdown, generateEmptyReport, formatWorkspaceRollupMarkdown, generateEmptyWorkspaceRollup } from "./report/generator.js";
+import { buildMultiRepoRollupPrompt } from "./ai/prompt.js";
+import type { RepoRollupActivity, MultiRepoRollupContext, AnalysisResult } from "./ai/types.js";
+import type { ReportMeta } from "./report/types.js";
 import { ReportStorage } from "./report/storage.js";
 import { renderReportFileToAnsi } from "./report/viewer.js";
 import { showTerminalPager } from "./tui/pager.js";
@@ -22,6 +25,7 @@ import { IngestWebServer } from "./server/server.js";
 import { ANSI } from "./tui/ansi.js";
 
 interface ParsedArgs {
+  rollup?: boolean;
   configPath?: string;
   outputRoot?: string;
   retentionDays?: number;
@@ -63,6 +67,8 @@ function parseCliArgs(args: string[]): ParsedArgs {
 
     if (arg === "-h" || arg === "--help") {
       result.help = true;
+    } else if (arg === "--rollup" || arg === "rollup") {
+      result.rollup = true;
     } else if (arg === "-i" || arg === "--interactive") {
       result.interactive = true;
     } else if (arg === "--init" || arg === "init") {
@@ -147,6 +153,7 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --ui [--port <N>]            Launch web browser report dashboard
   ingest --init                       Interactive configuration setup wizard
   ingest --init --quick               Quick setup with intelligent defaults (.ingestrc)
+  ingest --rollup                     Generate multi-repo workspace rollup summary
   ingest clean [--days <N>]           Clean up / prune expired reports (default 30 days)
   ingest [config-path]                Run headless generation for all repos in config
   ingest --repo <path>                Run report for a single repository
@@ -173,6 +180,7 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   --global                    Target global configuration (~/.config/ingest/config.jsonc)
   -i, --interactive           Force interactive TUI mode
   --clean, clean              Prune expired reports older than retention period
+  --rollup                    Synthesize cross-repository executive rollup report
   -d, --days <N>              Override expiration retention window in days (default: 30)
   --config <path>             Path to custom config.jsonc
   --output-root <path>        Override report output directory
@@ -233,8 +241,11 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   }
 
   Logger.info(`Processing ${targetRepos.length} repository(ies)...`);
+  const repoActivities: RepoRollupActivity[] = [];
 
   for (const repo of targetRepos) {
+    const repoCommits: import("./git/types.js").CommitRecord[] = [];
+    let repoDiffStat: import("./git/types.js").DiffStat | undefined = undefined;
     try {
       const repoPath = await resolveRepoPath(repo.path);
       const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
@@ -261,6 +272,23 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
           let diffStat;
           if ((parsed.diffMode || effectiveRepo.diff_mode !== false) && commits.length > 0) {
             diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines);
+          }
+
+          // Accumulate for multi-repo rollup
+          for (const c of commits) {
+            if (!repoCommits.some((existing) => existing.hash === c.hash)) {
+              repoCommits.push(c);
+            }
+          }
+          if (diffStat) {
+            if (!repoDiffStat) {
+              repoDiffStat = { ...diffStat, fileStats: [...diffStat.fileStats] };
+            } else {
+              repoDiffStat.filesChangedCount += diffStat.filesChangedCount;
+              repoDiffStat.insertions += diffStat.insertions;
+              repoDiffStat.deletions += diffStat.deletions;
+              repoDiffStat.fileStats.push(...diffStat.fileStats);
+            }
           }
 
           const analysisContext = {
@@ -302,8 +330,78 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
           await Logger.error(`Failed to generate report for ${repo.path} on branch ${branch}`, branchErr);
         }
       }
+
+      repoActivities.push({
+        repoName,
+        repoPath,
+        branches,
+        commits: repoCommits,
+        diffStat: repoDiffStat,
+      });
     } catch (err) {
       await Logger.error(`Failed to generate report for ${repo.path}`, err);
+    }
+  }
+
+  // Generate multi-repo workspace rollup if requested
+  if (parsed.rollup) {
+    try {
+      console.log(`\n\x1b[1m\x1b[36mGenerating Workspace Multi-Repo Rollup Digest...\x1b[0m`);
+      const totalRollupCommits = repoActivities.reduce((acc, r) => acc + r.commits.length, 0);
+      const rollupContext: MultiRepoRollupContext = {
+        workspaceName: "Workspace Rollup",
+        dateStr,
+        repos: repoActivities,
+        basePrompt: config.prompt,
+        customPrompt: null,
+        reportStyle: parsed.reportStyle || config.reportStyle || "default",
+      };
+
+      let rollupMarkdown = "";
+      let rollupMeta: ReportMeta;
+
+      if (totalRollupCommits === 0) {
+        Logger.info(`No commits found across ${repoActivities.length} repositories. Generating empty workspace rollup report.`);
+        const res = generateEmptyWorkspaceRollup(rollupContext);
+        rollupMarkdown = res.markdown;
+        rollupMeta = res.meta;
+      } else {
+        Logger.info(`Calling AI provider (${config.defaultProvider}) for workspace rollup...`);
+        const provider = AIFactory.getProvider(config);
+        let aiResult: AnalysisResult;
+        if (typeof provider.analyzeMultiRepo === "function") {
+          aiResult = await provider.analyzeMultiRepo(rollupContext);
+        } else if (typeof provider.generate === "function") {
+          const prompt = buildMultiRepoRollupPrompt(rollupContext);
+          const content = await provider.generate(prompt);
+          aiResult = { content, providerLabel: provider.id, rawResult: content };
+        } else {
+          const prompt = buildMultiRepoRollupPrompt(rollupContext);
+          aiResult = await provider.analyze({
+            repoName: "_workspace",
+            repoPath: process.cwd(),
+            branches: rollupContext.repos.flatMap((r) => r.branches),
+            branch: "rollup",
+            dateStr,
+            commits: rollupContext.repos.flatMap((r) => r.commits),
+            basePrompt: prompt,
+            customPrompt: prompt,
+            reportStyle: rollupContext.reportStyle,
+          });
+        }
+
+        const res = formatWorkspaceRollupMarkdown(rollupContext, aiResult);
+        rollupMarkdown = res.markdown;
+        rollupMeta = res.meta;
+      }
+
+      const saved = await ReportStorage.saveWorkspaceRollup(config.outputRoot, rollupMeta, rollupMarkdown);
+      const tokenInfo = rollupMeta?.tokenUsage?.totalTokens
+        ? ` (${rollupMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
+        : "";
+      Logger.success(`Workspace rollup report written to ${saved.filePath}${tokenInfo}`);
+    } catch (rollupErr) {
+      await Logger.error("Failed to generate workspace multi-repo rollup report", rollupErr);
     }
   }
 

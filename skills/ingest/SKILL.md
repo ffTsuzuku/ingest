@@ -26,6 +26,11 @@ description: >-
      ```bash
      ingest
      ```
+   - Generate multi-repository workspace rollup summary across all configured repositories:
+     ```bash
+     ingest --rollup
+     ingest --rollup --date 2026-04-05
+     ```
    - Generate report for a specific repository on a specific date or date range:
      ```bash
      ingest --repo /path/to/repo --date 2026-04-05
@@ -135,6 +140,7 @@ description: >-
 ## How to Assist Users
 
 - When the user wants a summary of today's work or a specific time period, suggest running `ingest` in the current directory or specifying `--date YYYY-MM-DD` or `--date YYYY-MM-DD..YYYY-MM-DD`.
+- When the user wants a cross-repository executive summary or multi-system engineering rollup, suggest running `ingest --rollup`.
 - When the user wants automated nightly reports, guide them through `ingest --schedule-install` or the interactive TUI Scheduler Wizard.
 - When the user wants to customize AI prompts or branch targets per repo, suggest creating a local `.ingestrc` file in the repo root or updating `~/.config/ingest/config.jsonc`.
 

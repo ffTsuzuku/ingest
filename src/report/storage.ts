@@ -66,6 +66,41 @@ export class ReportStorage {
     };
   }
 
+    public static getWorkspaceRollupFilePath(
+    outputRoot: string,
+    dateStr: string,
+    reportStyle?: string,
+  ): string {
+    const styleSuffix =
+      reportStyle && reportStyle !== "default" && reportStyle.trim() !== ""
+        ? `-${reportStyle.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`
+        : "";
+    return join(outputRoot, "_workspace", `${dateStr}-rollup${styleSuffix}-summary.md`);
+  }
+
+  public static async saveWorkspaceRollup(
+    outputRoot: string,
+    meta: ReportMeta,
+    markdownContent: string,
+  ): Promise<GeneratedReport> {
+    const effectiveMeta: ReportMeta = {
+      ...meta,
+      repoName: "_workspace",
+      branch: meta.branch || "rollup",
+    };
+    const filePath = this.getWorkspaceRollupFilePath(outputRoot, effectiveMeta.dateStr, effectiveMeta.reportStyle);
+    const targetDir = join(outputRoot, "_workspace");
+
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(filePath, markdownContent, "utf8");
+
+    return {
+      meta: effectiveMeta,
+      markdownContent,
+      filePath,
+    };
+  }
+
   public static async saveReport(
     outputRoot: string,
     meta: ReportMeta,

@@ -45,11 +45,11 @@ graph TD
 - **`diff.ts`**: Analyzes repository file stats (`git diff --stat`) and patch excerpts for deep-dive AI context.
 
 ### 2.3. `src/ai/`
-- **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, `AnalysisResult`, and `TokenUsage`.
+- **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, `RepoRollupActivity`, `MultiRepoRollupContext`, `AnalysisResult`, and `TokenUsage`.
 - **`discovery.ts`**: Dynamic agent harness registry and real-time PATH probing engine (`HarnessDiscovery`). Automatically detects available CLI tools (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, `gh copilot`) with status badges and smart defaults.
 - **`tokens.ts`**: Token parsing and formatting utility. Parses exact token metadata from report footers and formats token counts with `N/A` fallback for unrecorded reports.
 - **`repair.ts`**: AI-powered Mermaid syntax repair and healing engine. Fixes unquoted node labels, illegal node IDs, broken connector arrows, and converts unformatted architecture blocks into valid `flowchart TD` diagrams.
-- **`prompt.ts`**: Generates high-fidelity structured prompts with multi-style layout engines (`buildStandardAnalysisPrompt`, `buildSystemCentricPrompt`). Implements progressive disclosure (30-second summary, 5-minute briefing with codebase map, causal Problem->Change->Result breakdowns, behavior changes table, and commit appendix).
+- **`prompt.ts`**: Generates high-fidelity structured prompts with multi-style layout engines (`buildStandardAnalysisPrompt`, `buildSystemCentricPrompt`) and multi-repo workspace rollup prompt synthesis (`buildMultiRepoRollupPrompt`). Highlights cross-repo architectural interactions, shared contracts, stack-wide risk/deployment notes, and activity matrices.
 - **`antigravity.ts`**: Primary provider adapter for Antigravity CLI (`agy --print --output-format json --dangerously-skip-permissions`).
 - **`claude.ts`**: Provider adapter for Anthropic Claude Code CLI (`claude -p`).
 - **`codex.ts`**: Provider adapter for OpenAI Codex CLI (`codex exec`).
@@ -62,8 +62,8 @@ graph TD
 - **`factory.ts`**: Instantiates and selects the appropriate provider based on active configuration.
 
 ### 2.4. `src/report/`
-- **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown with exact token counts and branch context in the metadata footer.
-- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD[-<branch>][-<style>]-summary.md`), creates missing directories, scans past reports with token usage and branch metadata (`listReports`), parses branch and style filename variants (`parseReportFileName`), lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
+- **`generator.ts`**: Formats structured single-repo and workspace multi-repo rollup markdown reports (`formatReportMarkdown`, `formatWorkspaceRollupMarkdown`, `generateEmptyReport`, `generateEmptyWorkspaceRollup`) with exact token counts and branch/repo context in the metadata footer.
+- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD[-<branch>][-<style>]-summary.md` and `<output_root>/_workspace/YYYY-MM-DD-rollup[-<style>]-summary.md`), creates missing directories, saves workspace rollups (`saveWorkspaceRollup`), scans past reports (`listReports`), parses branch and style filename variants (`parseReportFileName`), lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
 - **`graph.ts`**: Zero-dependency 2D Unicode & ANSI graph layout engine. Implements topological ranking, character matrix plotting, box-drawing, corner routing, and branch arrow rendering for Mermaid flowcharts directly in terminal character grids.
 - **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting, responsive table cell wrapping, and dual-mode diagram formatting (2D box flow vs structured component map).
 
