@@ -1,7 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { ANSI, stripAnsi, wrapAnsiLine, visibleLength } from "../tui/ansi.js";
+import { render2DUnicodeGraph } from "./graph.js";
 
 export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): string[] {
+  const rendered2D = render2DUnicodeGraph(codeLines, contentWidth);
+  if (rendered2D.length > 0) {
+    return rendered2D;
+  }
+
   const barWidth = Math.max(20, Math.min(contentWidth - 4, 72));
   const output: string[] = [];
 

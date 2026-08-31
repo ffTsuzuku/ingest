@@ -118,7 +118,7 @@ describe("Markdown Terminal Renderer", () => {
     }
   });
 
-  it("should format mermaid diagrams into clean ANSI components and execution flows", () => {
+  it("should format mermaid diagrams into clean 2D Unicode architecture flow with connected boxes", () => {
     const md = `\`\`\`mermaid
 flowchart TD
   CLI["CLI Parser<br/><code>src/index.ts</code>"]
@@ -130,18 +130,18 @@ flowchart TD
     const lines = renderMarkdownToAnsi(md);
     const plainText = lines.map(stripAnsi).join("\n");
 
-    assert.ok(plainText.includes("Architecture & Execution Flow"));
-    assert.ok(plainText.includes("Architecture Components:"));
-    assert.ok(plainText.includes("CLI"));
-    assert.ok(plainText.includes("CLI Parser (src/index.ts)"));
-    assert.ok(plainText.includes("Execution & Dependency Flows:"));
-    assert.ok(plainText.includes("CLI ──[Interactive Mode]──► TUI"));
-    assert.ok(plainText.includes("CLI ──[Headless]──► Engine"));
+    assert.ok(plainText.includes("2D Interactive Architecture Flow"));
+    assert.ok(plainText.includes("CLI Parser"));
+    assert.ok(plainText.includes("(src/index.ts)"));
+    assert.ok(plainText.includes("Terminal UI"));
+    assert.ok(plainText.includes("Engine"));
+    assert.ok(plainText.includes("┌"));
+    assert.ok(plainText.includes("▼"));
     assert.ok(!plainText.includes("<br/>"));
     assert.ok(!plainText.includes("<code>"));
   });
 
-  it("should format decision diamond flowcharts with inline node definitions", () => {
+  it("should format decision diamond flowcharts with 2D Unicode boxes and branch arrows", () => {
     const md = `\`\`\`mermaid
 graph TD
     A["Scheduled Run Triggered"] --> B{"Has --expire-schedule flag?"}
@@ -154,14 +154,13 @@ graph TD
     const lines = renderMarkdownToAnsi(md);
     const plainText = lines.map(stripAnsi).join("\n");
 
-    assert.ok(plainText.includes("Architecture & Execution Flow"));
+    assert.ok(plainText.includes("2D Interactive Architecture Flow"));
     assert.ok(plainText.includes("Scheduled Run Triggered"));
     assert.ok(plainText.includes("Has --expire-schedule flag?"));
-    assert.ok(plainText.includes("A ────► B"));
-    assert.ok(plainText.includes("B ──[Yes]──► C"));
-    assert.ok(plainText.includes("B ──[No]──► D"));
-    assert.ok(plainText.includes("C ──[Yes]──► E"));
-    assert.ok(plainText.includes("C ──[No]──► D"));
+    assert.ok(plainText.includes("Current Date > Expiration Date?"));
+    assert.ok(plainText.includes("Execute Ingest Report Generation"));
+    assert.ok(plainText.includes("◇"));
+    assert.ok(plainText.includes("▼"));
   });
 });
 
