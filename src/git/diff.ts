@@ -466,9 +466,22 @@ export async function fetchDiffPatchesBetweenRefs(
   repoPath: string,
   baseRef: string,
   targetRef?: string,
-  maxPatchLines = 300,
+  maxPatchLinesOrOptions: number | DiffOptions = 300,
+  maybeOptions?: DiffOptions,
 ): Promise<string> {
   const range = targetRef && !baseRef.includes("..") ? `${baseRef}..${targetRef}` : baseRef;
+  const maxPatchLines =
+    typeof maxPatchLinesOrOptions === "number"
+      ? maxPatchLinesOrOptions
+      : maxPatchLinesOrOptions?.maxPatchLines ?? maxPatchLinesOrOptions?.maxLines ?? 300;
+
+  const options: DiffOptions =
+    typeof maxPatchLinesOrOptions === "object"
+      ? maxPatchLinesOrOptions
+      : maybeOptions ?? {};
+
+  const smartFilter = options.smartDiffFilter ?? true;
+  const ignorePatterns = options.diffIgnorePatterns ?? [];
 
   const res = await runGit(["diff", range, "-p", "-U2", "--no-color"], repoPath);
   if (res.exitCode !== 0 || !res.stdout) {
@@ -476,37 +489,80 @@ export async function fetchDiffPatchesBetweenRefs(
   }
 
   const rawLines = res.stdout.split("\n");
-  const filteredLines: string[] = [];
-  let skippingCurrentFile = false;
+  const fileDiffs: ParsedFileDiff[] = [];
+  let currentFile: ParsedFileDiff | null = null;
+  let fileIndex = 0;
 
   for (const line of rawLines) {
-    if (filteredLines.length >= maxPatchLines) {
-      filteredLines.push("\n... [Diff patches truncated for brevity] ...");
-      break;
-    }
-
     const diffHeaderMatch = line.match(/^diff --git a\/(.+) b\/(.+)/);
     if (diffHeaderMatch) {
-      const filePath = diffHeaderMatch[2] || diffHeaderMatch[1] || "";
-      if (isNoisyFile(filePath)) {
-        skippingCurrentFile = true;
-      } else {
-        skippingCurrentFile = false;
+      if (currentFile) {
+        fileDiffs.push(currentFile);
       }
-    }
-
-    if (skippingCurrentFile) {
+      const filePath = diffHeaderMatch[2] || diffHeaderMatch[1] || "";
+      const isNoisy = isNoisyFile(filePath, ignorePatterns, smartFilter);
+      const priority = getFilePriority(filePath);
+      currentFile = {
+        filePath,
+        lines: [line],
+        isNoisy,
+        priority,
+        order: fileIndex++,
+      };
       continue;
     }
 
-    if (line.startsWith("index ") || line.startsWith("old mode ") || line.startsWith("new mode ")) {
-      continue;
+    if (currentFile) {
+      if (line.startsWith("index ") || line.startsWith("old mode ") || line.startsWith("new mode ")) {
+        continue;
+      }
+      currentFile.lines.push(line);
     }
-
-    filteredLines.push(line);
   }
 
-  return filteredLines.join("\n");
+  if (currentFile) {
+    fileDiffs.push(currentFile);
+  }
+
+  const activeFileDiffs = fileDiffs.filter((f) => !f.isNoisy);
+  if (activeFileDiffs.length === 0) {
+    return "";
+  }
+
+  const totalActiveLines = activeFileDiffs.reduce((sum, f) => sum + f.lines.length, 0);
+  if (totalActiveLines <= maxPatchLines) {
+    return activeFileDiffs.map((f) => f.lines.join("\n")).join("\n");
+  }
+
+  const prioritized = [...activeFileDiffs].sort((a, b) => b.priority - a.priority || a.order - b.order);
+  const outputSections: string[] = [];
+  let remainingBudget = maxPatchLines;
+  let omittedFileCount = 0;
+
+  for (const file of prioritized) {
+    if (remainingBudget <= 0) {
+      omittedFileCount++;
+      continue;
+    }
+
+    if (file.lines.length <= remainingBudget) {
+      outputSections.push(file.lines.join("\n"));
+      remainingBudget -= file.lines.length;
+    } else if (remainingBudget >= 6) {
+      const partialLines = file.lines.slice(0, remainingBudget - 1);
+      partialLines.push(`\n... [Diff for ${file.filePath} truncated to fit line budget] ...`);
+      outputSections.push(partialLines.join("\n"));
+      remainingBudget = 0;
+    } else {
+      omittedFileCount++;
+    }
+  }
+
+  if (omittedFileCount > 0) {
+    outputSections.push(`\n... [Diff truncated: ${omittedFileCount} lower-priority file(s) omitted to fit budget] ...`);
+  }
+
+  return outputSections.join("\n");
 }
 
 /**
@@ -516,9 +572,20 @@ export async function fetchDiffStatBetweenRefs(
   repoPath: string,
   baseRef: string,
   targetRef?: string,
-  maxLines = 200,
+  maxLinesOrOptions: number | DiffOptions = 200,
+  maybeOptions?: DiffOptions,
 ): Promise<DiffStat | undefined> {
   const range = targetRef && !baseRef.includes("..") ? `${baseRef}..${targetRef}` : baseRef;
+  const maxLines =
+    typeof maxLinesOrOptions === "number"
+      ? maxLinesOrOptions
+      : maxLinesOrOptions?.maxLines ?? 200;
+
+  const options: DiffOptions =
+    typeof maxLinesOrOptions === "object" ? maxLinesOrOptions : maybeOptions ?? {};
+
+  const smartFilter = options.smartDiffFilter ?? true;
+  const ignorePatterns = options.diffIgnorePatterns ?? [];
 
   const res = await runGit(["diff", range, "--stat"], repoPath);
   if (res.exitCode !== 0) {
@@ -554,6 +621,10 @@ export async function fetchDiffStatBetweenRefs(
     const fileMatch = line.match(/^\s*(.+?)\s*\|\s*(\d+)\s*([\+\-]*)/);
     if (fileMatch) {
       const path = (fileMatch[1] ?? "").trim();
+      if (isNoisyFile(path, ignorePatterns, smartFilter)) {
+        continue;
+      }
+
       const count = parseInt(fileMatch[2] ?? "0", 10);
       const symbols = fileMatch[3] ?? "";
       const plusCount = (symbols.match(/\+/g) || []).length;
@@ -567,8 +638,24 @@ export async function fetchDiffStatBetweenRefs(
     }
   }
 
-  const truncatedSummary = lines.slice(0, maxLines).join("\n");
-  const diffPatches = await fetchDiffPatchesBetweenRefs(repoPath, baseRef, targetRef, maxLines * 2);
+  fileStats.sort((a, b) => getFilePriority(b.path) - getFilePriority(a.path));
+
+  const truncatedSummary = lines
+    .filter((l) => {
+      const fm = l.match(/^\s*(.+?)\s*\|\s*\d+/);
+      if (fm) {
+        return !isNoisyFile(fm[1]?.trim() || "", ignorePatterns, smartFilter);
+      }
+      return true;
+    })
+    .slice(0, maxLines)
+    .join("\n");
+
+  const diffPatches = await fetchDiffPatchesBetweenRefs(repoPath, baseRef, targetRef, {
+    maxPatchLines: maxLines * 2,
+    smartDiffFilter: smartFilter,
+    diffIgnorePatterns: ignorePatterns,
+  });
 
   return {
     filesChangedCount: totalFiles || fileStats.length,
