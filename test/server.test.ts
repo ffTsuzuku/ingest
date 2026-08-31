@@ -51,6 +51,42 @@ describe("Web UI Server & Dashboard", () => {
     assert.ok(resMermaid.includes("mermaid-card"));
   });
 
+  it("should format commit hashes with interactive click-to-copy metadata", () => {
+    const html = renderDashboardHtml();
+    const sandbox: Record<string, unknown> = {
+      window: {},
+      document: { getElementById: () => ({ addEventListener: () => {} }) },
+    };
+    vm.createContext(sandbox);
+    const startIdx = html.indexOf("function escapeHtml");
+    const endIdx = html.indexOf("async function loadStatus");
+    assert.ok(startIdx > 0 && endIdx > startIdx);
+
+    vm.runInContext(
+      `
+      ${html.slice(startIdx, endIdx)}
+      var resCommit = renderMarkdown('| Hash | Branch |\\n| :--- | :--- |\\n| \`33523e35\` | \`main\` |');
+      var resInlineCommit = renderMarkdown('Commit \`e30333b6\` fixed retention issue.');
+      var resRegularCode = renderMarkdown('Use command \`npm test\` to run.');
+    `,
+      sandbox,
+    );
+
+    const resCommit = sandbox.resCommit as string;
+    const resInlineCommit = sandbox.resInlineCommit as string;
+    const resRegularCode = sandbox.resRegularCode as string;
+
+    assert.ok(resCommit.includes('class="commit-hash"'));
+    assert.ok(resCommit.includes('data-hash="33523e35"'));
+    assert.ok(resCommit.includes('title="Click to copy commit hash 33523e35"'));
+
+    assert.ok(resInlineCommit.includes('data-hash="e30333b6"'));
+    assert.ok(resInlineCommit.includes('class="commit-hash"'));
+
+    assert.ok(!resRegularCode.includes('class="commit-hash"'));
+    assert.ok(resRegularCode.includes('<code>npm test</code>'));
+  });
+
   it("should start server and respond to /api/status, /api/repos, /api/reports, and /api/report", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "ingest-web-server-"));
 

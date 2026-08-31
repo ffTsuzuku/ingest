@@ -97,8 +97,12 @@ CLI / Invoker
 - <Configuration precedence subtleties, automated schedule removal upon expiration, edge case behaviors>
 
 ## Verification & Quality Assurance
-- **Test Evidence**: <Test suites added or verified, test counts, passing status>
-- **Static Checks**: <Typecheck, build, doc verification, and lint validation performed>
+
+### Test Evidence
+- <Test suites added or verified, test files touched, assertions, passing status>
+
+### Static Checks & Documentation Integrity
+- <Typecheck, build, doc verification, and lint validation performed>
 
 ## Codebase Navigation ("Start Here")
 | Subsystem / Area | Start Here File | Primary Responsibility |

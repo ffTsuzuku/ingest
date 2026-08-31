@@ -562,6 +562,32 @@ export function renderDashboardHtml(): string {
       border-radius: 4px;
       font-size: 12px;
       text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      user-select: all;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .commit-hash:hover {
+      background: rgba(210, 153, 34, 0.28);
+      border-color: var(--accent-yellow);
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(210, 153, 34, 0.25);
+    }
+
+    .commit-hash:active {
+      transform: translateY(0);
+      background: rgba(210, 153, 34, 0.4);
+    }
+
+    .commit-hash.copied {
+      background: rgba(63, 185, 80, 0.25) !important;
+      border-color: var(--accent-green) !important;
+      color: var(--accent-green) !important;
     }
 
     .markdown-body hr {
@@ -676,6 +702,14 @@ export function renderDashboardHtml(): string {
       gap: 4px;
       transition: all 0.15s;
       user-select: none;
+      min-width: 26px;
+      height: 24px;
+      line-height: 1;
+    }
+
+    .diagram-btn svg {
+      display: block;
+      pointer-events: none;
     }
 
     .diagram-btn:hover {
@@ -895,9 +929,9 @@ export function renderDashboardHtml(): string {
     <div class="mermaid-modal-header">
       <div class="brand-title" id="modal-diagram-title">📊 Architecture & Flow Diagram (Interactive Fullscreen)</div>
       <div class="mermaid-toolbar">
-        <button class="diagram-btn" id="modal-zoom-out" title="Zoom Out (–)">➖</button>
+        <button class="diagram-btn" id="modal-zoom-out" title="Zoom Out (–)"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
         <span class="diagram-zoom-level" id="modal-zoom-level">100%</span>
-        <button class="diagram-btn" id="modal-zoom-in" title="Zoom In (+)">➕</button>
+        <button class="diagram-btn" id="modal-zoom-in" title="Zoom In (+)"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
         <button class="diagram-btn" id="modal-zoom-reset" title="Reset Zoom">↺ Reset</button>
         <button class="diagram-btn" id="modal-close" title="Close Fullscreen (Esc)">✕ Close</button>
       </div>
@@ -962,9 +996,9 @@ export function renderDashboardHtml(): string {
           '<div class="mermaid-title">📊 Architecture & Flow Diagram</div>' +
           '<div class="mermaid-toolbar">' +
             '<button class="diagram-btn btn-fix-mermaid btn-fix-magic" title="Repair syntax with AI">✨ Fix</button>' +
-            '<button class="diagram-btn btn-zoom-out" title="Zoom Out (–)">➖</button>' +
+            '<button class="diagram-btn btn-zoom-out" title="Zoom Out (–)"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>' +
             '<span class="diagram-zoom-level">100%</span>' +
-            '<button class="diagram-btn btn-zoom-in" title="Zoom In (+)">➕</button>' +
+            '<button class="diagram-btn btn-zoom-in" title="Zoom In (+)"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>' +
             '<button class="diagram-btn btn-zoom-reset" title="Reset Zoom">↺</button>' +
             '<button class="diagram-btn btn-fullscreen" title="Fullscreen View">⛶ Expand</button>' +
           '</div>' +
@@ -1171,13 +1205,37 @@ export function renderDashboardHtml(): string {
       }).join('\\n');
     }
 
+    function copyTextToClipboard(text) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return Promise.resolve();
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+
     function formatInline(text) {
       let t = escapeHtml(text);
-      // Inline code
+      // Links
+      t = t.replace(/\\[([^\\]]+)\\]\\(([^\\)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener" style="color: var(--accent-blue); text-decoration: none;">$1</a>');
+      // Inline code & commit hashes
       t = t.replace(/\`([^\`]+)\`/g, (match, p1) => {
-        // Detect commit hash
-        if (/^[0-9a-f]{7,40}$/i.test(p1.trim())) {
-          return '<span class="commit-hash">\`' + p1 + '\`</span>';
+        const trimmed = p1.trim();
+        // Detect commit hash (7-40 hex chars)
+        if (/^[0-9a-f]{7,40}$/i.test(trimmed)) {
+          return '<span class="commit-hash" data-hash="' + trimmed + '" title="Click to copy commit hash ' + trimmed + '" role="button" tabindex="0">\`' + trimmed + '\`</span>';
         }
         return '<code>' + p1 + '</code>';
       });
@@ -1186,8 +1244,6 @@ export function renderDashboardHtml(): string {
       t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>');
       // Italic
       t = t.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
-      // Links
-      t = t.replace(/\\[([^\\]]+)\\]\\(([^\\)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener" style="color: var(--accent-blue); text-decoration: none;">$1</a>');
       return t;
     }
 
@@ -1661,6 +1717,40 @@ export function renderDashboardHtml(): string {
       a.click();
       URL.revokeObjectURL(url);
     });
+
+    // Delegated click and keydown for commit hash copy
+    const viewerContainer = document.getElementById('viewer-container');
+    if (viewerContainer) {
+      viewerContainer.addEventListener('click', (e) => {
+        const commitEl = e.target.closest('.commit-hash');
+        if (!commitEl) return;
+        const hash = commitEl.getAttribute('data-hash') || commitEl.textContent.replace(/[\`\\s]/g, '');
+        if (!hash) return;
+
+        copyTextToClipboard(hash)
+          .then(() => {
+            commitEl.classList.add('copied');
+            showToast('📋 Copied commit ' + hash + ' to clipboard!');
+            setTimeout(() => {
+              commitEl.classList.remove('copied');
+            }, 1500);
+          })
+          .catch((err) => {
+            console.error('Failed to copy commit hash', err);
+            showToast('❌ Failed to copy to clipboard');
+          });
+      });
+
+      viewerContainer.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          const commitEl = e.target.closest('.commit-hash');
+          if (commitEl) {
+            e.preventDefault();
+            commitEl.click();
+          }
+        }
+      });
+    }
 
     // Keyboard navigation
     window.addEventListener('keydown', (e) => {
