@@ -1,6 +1,7 @@
-import { mkdir, readdir, rmdir, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { GeneratedReport, ReportMeta, ReportSummary } from "./types.js";
+import type { GeneratedReport, ReportMeta, ReportSummary, TokenUsage } from "./types.js";
+import { parseTokenUsageFromMarkdown } from "../ai/tokens.js";
 
 export class ReportStorage {
   public static getReportFilePath(
@@ -57,6 +58,14 @@ export class ReportStorage {
               const dateStr = styleMatch ? (styleMatch[1] ?? file.name) : (dateMatch ? (dateMatch[1] ?? file.name) : file.name.replace(/-summary\.md$/, ""));
               const reportStyle = styleMatch && styleMatch[2] ? styleMatch[2] : undefined;
 
+              let tokenUsage: TokenUsage | undefined = undefined;
+              try {
+                const content = await readFile(fullPath, "utf8");
+                tokenUsage = parseTokenUsageFromMarkdown(content) || undefined;
+              } catch {
+                // Ignore read error
+              }
+
               reports.push({
                 filePath: fullPath,
                 fileName: file.name,
@@ -65,6 +74,7 @@ export class ReportStorage {
                 sizeBytes: fileStats.size,
                 modifiedAt: fileStats.mtime,
                 reportStyle,
+                tokenUsage,
               });
             }
           }

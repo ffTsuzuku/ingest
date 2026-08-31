@@ -1,3 +1,7 @@
+import type { TokenUsage } from "../ai/types.js";
+
+export type { TokenUsage };
+
 export interface ReportMeta {
   repoName: string;
   repoPath: string;
@@ -7,6 +11,7 @@ export interface ReportMeta {
   providerLabel: string;
   commitCount: number;
   reportStyle?: string;
+  tokenUsage?: TokenUsage;
 }
 
 export interface GeneratedReport {
@@ -23,5 +28,6 @@ export interface ReportSummary {
   sizeBytes: number;
   modifiedAt: Date;
   reportStyle?: string;
+  tokenUsage?: TokenUsage;
 }
 

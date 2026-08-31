@@ -37,6 +37,7 @@ description: >-
      ingest --repo /path/to/repo --diff
      ingest --repo /path/to/repo --style system-centric
      ```
+   - Automatically tracks exact model prompt and completion tokens in generated reports (with N/A fallback when unrecorded).
 
 3. **Web Browser Report Explorer & Dashboard**:
    - Serve an interactive web dashboard across all repositories in the centralized report store:
@@ -45,12 +46,16 @@ description: >-
      ingest --ui --port 3456
      ingest --ui --no-open
      ```
-   - Automatically pre-selects current repo if run inside a Git repository while providing a sidebar switcher to browse reports for all other tracked repositories.
+   - Features live token badges (`⚡ 14.1k tokens` / `⚡ Tokens: N/A`), timeline switcher, and one-click AI Mermaid syntax repair (`✨ Fix Diagrams`).
 
-4. **Terminal Markdown Viewer & Pager**:
+4. **Terminal Markdown Viewer & Diagram Repair**:
    - View generated markdown reports directly in the terminal with ANSI styling, responsive table wrapping, and 2D Unicode Mermaid diagrams:
      ```bash
      ingest --view /path/to/report.md
+     ```
+   - Repair and heal broken Mermaid diagram syntax via AI directly from the CLI:
+     ```bash
+     ingest --fix-diagrams /path/to/report.md
      ```
    - In the pager, press `m` to toggle Mermaid rendering between **2D Connected Box Flowcharts** and **Structured Component & Flow Lists**.
 

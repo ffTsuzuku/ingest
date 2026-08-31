@@ -45,22 +45,24 @@ graph TD
 - **`diff.ts`**: Analyzes repository file stats (`git diff --stat`) and patch excerpts for deep-dive AI context.
 
 ### 2.3. `src/ai/`
-- **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, and `AnalysisResult`.
+- **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, `AnalysisResult`, and `TokenUsage`.
+- **`tokens.ts`**: Token parsing and formatting utility. Parses exact token metadata from report footers and formats token counts with `N/A` fallback for unrecorded reports.
+- **`repair.ts`**: AI-powered Mermaid syntax repair and healing engine. Fixes unquoted node labels, illegal node IDs, broken connector arrows, and converts unformatted architecture blocks into valid `flowchart TD` diagrams.
 - **`prompt.ts`**: Generates high-fidelity structured prompts with multi-style layout engines (`buildStandardAnalysisPrompt`, `buildSystemCentricPrompt`). Implements progressive disclosure (30-second summary, 5-minute briefing with codebase map, causal Problem->Change->Result breakdowns, behavior changes table, and commit appendix).
-- **`antigravity.ts`**: Primary provider adapter for Antigravity CLI (`agy --print --dangerously-skip-permissions`).
+- **`antigravity.ts`**: Primary provider adapter for Antigravity CLI (`agy --print --output-format json --dangerously-skip-permissions`).
 - **`opencode.ts`**: Provider adapter for Opencode CLI / local OpenAI-compatible endpoints.
 - **`gemini-cli.ts`**: Provider adapter alias for backward compatibility.
 - **`factory.ts`**: Instantiates and selects the appropriate provider based on active configuration.
 
 ### 2.4. `src/report/`
-- **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown.
-- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports, lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
+- **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown with exact token counts in the metadata footer.
+- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports with token usage (`listReports`), lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
 - **`graph.ts`**: Zero-dependency 2D Unicode & ANSI graph layout engine. Implements topological ranking, character matrix plotting, box-drawing, corner routing, and branch arrow rendering for Mermaid flowcharts directly in terminal character grids.
 - **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting, responsive table cell wrapping, and dual-mode diagram formatting (2D box flow vs structured component map).
 
 ### 2.5. `src/server/`
-- **`server.ts`**: Zero-dependency HTTP server (`node:http`) powering the `--ui` Web Dashboard. Exposes REST endpoints (`/api/status`, `/api/repos`, `/api/reports`, `/api/report`) to browse reports across all repositories in the centralized `output_root`.
-- **`html.ts`**: Embedded responsive Single Page Application (HTML/CSS/JS) with live repo filtering, timeline report selector, zero-dependency Markdown renderer, diff syntax styling, copy-to-clipboard, and keyboard navigation (`/`, `c`).
+- **`server.ts`**: Zero-dependency HTTP server (`node:http`) powering the `--ui` Web Dashboard. Exposes REST endpoints (`/api/status`, `/api/repos`, `/api/reports`, `/api/report`, `POST /api/fix-mermaid`) to browse reports and heal Mermaid diagram syntax on demand.
+- **`html.ts`**: Embedded responsive Single Page Application (HTML/CSS/JS) with live repo filtering, timeline report selector, zero-dependency Markdown renderer, diff syntax styling, interactive Mermaid diagram viewer with AI repair (`✨ Fix Diagrams`), token usage badges, copy-to-clipboard, and keyboard navigation (`/`, `c`, `f`).
 
 ### 2.6. `src/scheduler/`
 - **`types.ts`**: Types for job configurations, frequency (daily, hourly, weekly, custom cron), expiration (`expiresAt`, `expireDays`), and status (`isExpired`).

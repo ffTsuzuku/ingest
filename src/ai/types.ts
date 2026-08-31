@@ -13,10 +13,17 @@ export interface AnalysisContext {
   reportStyle?: ReportStyle;
 }
 
+export interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 export interface AnalysisResult {
   content: string;
   providerLabel: string;
   rawResult?: string;
+  tokenUsage?: TokenUsage;
 }
 
 export interface AIProvider {
@@ -24,5 +31,6 @@ export interface AIProvider {
   readonly name: string;
   isAvailable(): Promise<boolean>;
   analyze(context: AnalysisContext): Promise<AnalysisResult>;
+  generate?(prompt: string, cwd?: string): Promise<string>;
 }
 

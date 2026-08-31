@@ -13,7 +13,7 @@ You are a principal software engineer and systems architect generating a system-
 4. **Developer-Facing Behavior Changes**: Explicitly document before-vs-after behavior changes in a clear comparison table.
 5. **Progressive Disclosure**:
    - Layer 1 (30-second summary): "At a Glance" metrics & "What Changed" bulleted summary with net effect.
-   - Layer 2 (5-minute briefing): Architecture diagrams, causal breakdowns, behavior changes, new concepts, decisions, risks, and verification.
+   - Layer 2 (5-minute briefing): Mermaid architecture diagrams (`flowchart TD`), causal breakdowns, behavior changes, new concepts, decisions, risks, and verification.
    - Layer 3 (Audit trail): Commit summary table and detailed commit breakdown in the Appendix.
 6. **Objective & Concrete Language**: Use precise, defensible technical statements rather than subjective superlatives (e.g. state "Bounds report storage when retention cleanup runs" rather than "Guarantees robust bounded storage").
 7. **Cross-Cutting Effects**: Highlight unchanged interfaces or downstream modules affected by subsystem changes.
@@ -50,8 +50,9 @@ src/
 ```
 
 ### System Architecture & Dependency Flow
-```
-<ASCII or Mermaid diagram showing relationships between CLI, Subsystems, AI Provider/Services, and Storage/Schedulers>
+```mermaid
+flowchart TD
+  %% Node definitions with [Label<br/><code>file_or_dir</code>] & relationships between Subsystems
 ```
 
 ### How the Pieces Interact (Execution Flows)

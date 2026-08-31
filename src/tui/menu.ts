@@ -357,7 +357,10 @@ export class InteractiveTUI {
       }
 
       const saved = await ReportStorage.saveReport(ctx.config.outputRoot, reportMeta, reportMarkdown);
-      console.log(`  ${ANSI.green}✔ Report saved to:${ANSI.reset} ${saved.filePath}`);
+      const tokenInfo = reportMeta?.tokenUsage?.totalTokens
+        ? ` ${ANSI.magenta}[⚡ ${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens]${ANSI.reset}`
+        : "";
+      console.log(`  ${ANSI.green}✔ Report saved to:${ANSI.reset} ${saved.filePath}${tokenInfo}`);
 
       if (ctx.config.retentionDays > 0) {
         const deleted = await ReportStorage.cleanExpiredReports(ctx.config.outputRoot, ctx.config.retentionDays);

@@ -1,6 +1,6 @@
 import { executeCommand } from "../utils/command.js";
 import { buildAnalysisPrompt } from "./prompt.js";
-import type { AIProvider, AnalysisContext, AnalysisResult } from "./types.js";
+import type { AIProvider, AnalysisContext, AnalysisResult, TokenUsage } from "./types.js";
 import type { OpencodeProviderConfig } from "../config/types.js";
 
 export class OpencodeProvider implements AIProvider {
@@ -21,6 +21,19 @@ export class OpencodeProvider implements AIProvider {
   public async analyze(context: AnalysisContext): Promise<AnalysisResult> {
     const prompt = buildAnalysisPrompt(context);
     const providerTag = this.config.provider ? `${this.config.provider}/${this.config.model}` : this.config.model;
+    const content = await this.generate(prompt, context.repoPath);
+    const providerLabel = `opencode:${providerTag}`;
+
+    return {
+      content,
+      providerLabel,
+      rawResult: content,
+      tokenUsage: {},
+    };
+  }
+
+  public async generate(prompt: string, cwd?: string): Promise<string> {
+    const providerTag = this.config.provider ? `${this.config.provider}/${this.config.model}` : this.config.model;
 
     const env: NodeJS.ProcessEnv = {};
     if (this.config.api_key_env && process.env[this.config.api_key_env]) {
@@ -29,7 +42,7 @@ export class OpencodeProvider implements AIProvider {
 
     const args = ["run", "--format", "json", "--model", providerTag, prompt];
     const result = await executeCommand("opencode", args, {
-      cwd: context.repoPath,
+      cwd: cwd || process.cwd(),
       env,
       timeoutMs: 180000,
     });
@@ -50,21 +63,13 @@ export class OpencodeProvider implements AIProvider {
           (typeof parsed.text === "string" && parsed.text) ||
           (typeof parsed.message === "string" && parsed.message);
         if (message) {
-          return {
-            content: message.trim(),
-            providerLabel: `opencode:${providerTag}`,
-            rawResult,
-          };
+          return message.trim();
         }
       } catch {
         continue;
       }
     }
 
-    return {
-      content: rawResult,
-      providerLabel: `opencode:${providerTag}`,
-      rawResult,
-    };
+    return rawResult;
   }
 }

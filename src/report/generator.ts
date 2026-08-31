@@ -15,6 +15,7 @@ export function formatReportMarkdown(
     providerLabel: result.providerLabel,
     commitCount: context.commits.length,
     reportStyle: context.reportStyle,
+    tokenUsage: result.tokenUsage,
   };
 
   let content = result.content.trim();
@@ -24,8 +25,13 @@ export function formatReportMarkdown(
     content = `# ${context.repoName} - ${context.dateStr}\n\n${content}`;
   }
 
+  let tokenStr = "";
+  if (result.tokenUsage && typeof result.tokenUsage.totalTokens === "number" && result.tokenUsage.totalTokens > 0) {
+    tokenStr = ` • ${result.tokenUsage.totalTokens.toLocaleString()} tokens`;
+  }
+
   // Append footer metadata comment
-  const footer = `\n\n---\n*Generated on ${generatedAt} via \`${result.providerLabel}\` (${context.commits.length} commits analyzed across branches: ${context.branches.join(", ")})*\n`;
+  const footer = `\n\n---\n*Generated on ${generatedAt} via \`${result.providerLabel}\` (${context.commits.length} commits analyzed across branches: ${context.branches.join(", ")})${tokenStr}*\n`;
 
   return {
     markdown: content + footer,

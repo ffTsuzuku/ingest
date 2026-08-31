@@ -79,6 +79,8 @@ describe("AI Prompt Builder", () => {
     assert.ok(prompt.includes("Bob Architect"));
     assert.ok(prompt.includes("Codebase Map"));
     assert.ok(prompt.includes("System Architecture & Dependency Flow"));
+    assert.ok(prompt.includes("```mermaid"));
+    assert.ok(prompt.includes("flowchart TD"));
     assert.ok(prompt.includes("**Problem**:"));
     assert.ok(prompt.includes("**Change**:"));
     assert.ok(prompt.includes("**Result**:"));

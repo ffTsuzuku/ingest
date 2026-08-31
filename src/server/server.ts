@@ -1,9 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
-import { readFile } from "node:fs/promises";
+import type { Socket } from "node:net";
+import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve, normalize } from "node:path";
 import { exec } from "node:child_process";
 import { renderDashboardHtml } from "./html.js";
 import { ReportStorage } from "../report/storage.js";
+import { ConfigManager } from "../config/manager.js";
+import { AIFactory } from "../ai/factory.js";
+import { repairReportMarkdown, repairMermaidDiagram } from "../ai/repair.js";
+import { parseTokenUsageFromMarkdown } from "../ai/tokens.js";
 import { Logger } from "../utils/logger.js";
 
 export interface ServerOptions {
@@ -24,6 +29,8 @@ export interface RunningServerInfo {
 export class IngestWebServer {
   private server: Server | null = null;
   private options: ServerOptions;
+  private sockets = new Set<Socket>();
+  private stoppingPromise: Promise<void> | null = null;
 
   constructor(options: ServerOptions) {
     this.options = options;
@@ -52,12 +59,35 @@ export class IngestWebServer {
   }
 
   public async stop(): Promise<void> {
-    if (this.server) {
-      await new Promise<void>((resolve, reject) => {
-        this.server?.close((err) => (err ? reject(err) : resolve()));
-      });
-      this.server = null;
+    if (this.stoppingPromise) {
+      return this.stoppingPromise;
     }
+    if (!this.server) {
+      return;
+    }
+
+    const currentServer = this.server;
+    this.server = null;
+
+    this.stoppingPromise = new Promise<void>((resolve) => {
+      // Forcefully terminate open keep-alive connections so server.close() doesn't hang
+      if (typeof currentServer.closeAllConnections === "function") {
+        currentServer.closeAllConnections();
+      } else if (typeof currentServer.closeIdleConnections === "function") {
+        currentServer.closeIdleConnections();
+      }
+
+      for (const socket of this.sockets) {
+        socket.destroy();
+      }
+      this.sockets.clear();
+
+      currentServer.close(() => {
+        resolve();
+      });
+    });
+
+    return this.stoppingPromise;
   }
 
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
@@ -140,11 +170,76 @@ export class IngestWebServer {
             fileName: fileParam,
             filePath: targetFilePath,
             content,
+            tokenUsage: parseTokenUsageFromMarkdown(content),
           });
         })
         .catch((err) => {
           sendError(404, `Report not found: ${String(err)}`);
         });
+      return;
+    }
+
+    if (pathname === "/api/fix-mermaid" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", async () => {
+        try {
+          const parsed = JSON.parse(body || "{}") as {
+            repo?: string;
+            file?: string;
+            mermaidCode?: string;
+          };
+
+          if (!parsed.repo || !parsed.file) {
+            sendError(400, "Missing 'repo' or 'file' parameter");
+            return;
+          }
+
+          const targetFilePath = normalize(join(outputRoot, parsed.repo, parsed.file));
+          if (!targetFilePath.startsWith(outputRoot)) {
+            sendError(403, "Access denied: Path traversal detected");
+            return;
+          }
+
+          const content = await readFile(targetFilePath, "utf8");
+          const config = await ConfigManager.load();
+          const provider = AIFactory.getProvider(config);
+
+          let updatedContent = content;
+          let repairedCount = 0;
+
+          if (parsed.mermaidCode && parsed.mermaidCode.trim()) {
+            const repaired = await repairMermaidDiagram(parsed.mermaidCode, provider);
+            if (content.includes(parsed.mermaidCode.trim())) {
+              updatedContent = content.replace(parsed.mermaidCode.trim(), repaired);
+              repairedCount = 1;
+            } else {
+              const res = await repairReportMarkdown(content, provider);
+              updatedContent = res.repairedMarkdown;
+              repairedCount = res.repairedCount;
+            }
+          } else {
+            const res = await repairReportMarkdown(content, provider);
+            updatedContent = res.repairedMarkdown;
+            repairedCount = res.repairedCount;
+          }
+
+          await writeFile(targetFilePath, updatedContent, "utf8");
+
+          sendJson(200, {
+            success: true,
+            repoName: parsed.repo,
+            fileName: parsed.file,
+            content: updatedContent,
+            repairedCount,
+            tokenUsage: parseTokenUsageFromMarkdown(updatedContent),
+          });
+        } catch (err) {
+          sendError(500, `Failed to repair Mermaid diagram: ${String(err)}`);
+        }
+      });
       return;
     }
 
@@ -158,6 +253,13 @@ export class IngestWebServer {
 
       const tryListen = () => {
         const server = createServer((req, res) => this.handleRequest(req, res));
+
+        server.on("connection", (socket) => {
+          this.sockets.add(socket);
+          socket.once("close", () => {
+            this.sockets.delete(socket);
+          });
+        });
 
         server.once("error", (err: NodeJS.ErrnoException) => {
           if (err.code === "EADDRINUSE" && attempts < maxRetries) {

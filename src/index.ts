@@ -35,6 +35,7 @@ interface ParsedArgs {
   diffMode?: boolean;
   reportStyle?: string;
   viewFile?: string;
+  fixDiagramFile?: string;
   ui?: boolean;
   port?: number;
   noOpen?: boolean;
@@ -117,6 +118,8 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.noOpen = true;
     } else if (arg === "--view" && i + 1 < args.length) {
       result.viewFile = args[++i];
+    } else if ((arg === "--fix-diagram" || arg === "--fix-diagrams" || arg === "--repair" || arg === "repair") && i + 1 < args.length) {
+      result.fixDiagramFile = args[++i];
     } else if (arg === "--install-skill") {
       result.installSkill = true;
     } else if (arg === "--schedule-install") {
@@ -153,6 +156,7 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --diff                       Enable Git diff deep-dive analysis
   ingest --clean                      Prune expired reports past retention period
   ingest --view <report.md>           View markdown report in terminal pager
+  ingest --fix-diagrams <report.md>   Inspect and repair Mermaid diagram syntax with AI
   ingest --install-skill              Deploy AI skill to ~/.gemini/config/skills/ingest/
   ingest --schedule-install           Install automated daily scheduler (launchd / cron)
   ingest --schedule-install --expires <YYYY-MM-DD>  Install scheduler with automatic expiration date
@@ -286,7 +290,10 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       }
 
       const saved = await ReportStorage.saveReport(config.outputRoot, reportMeta, reportMarkdown);
-      Logger.success(`Report written to ${saved.filePath}`);
+      const tokenInfo = reportMeta?.tokenUsage?.totalTokens
+        ? ` (${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
+        : "";
+      Logger.success(`Report written to ${saved.filePath}${tokenInfo}`);
     } catch (err) {
       await Logger.error(`Failed to generate report for ${repo.path}`, err);
     }
@@ -426,14 +433,24 @@ export async function main(): Promise<void> {
     }
     console.log(`\n  ${ANSI.dim}Press Ctrl+C to stop server${ANSI.reset}\n`);
 
+    let isShuttingDown = false;
     await new Promise<void>((resolvePromise) => {
-      process.on("SIGINT", () => {
+      const shutdown = async () => {
+        if (isShuttingDown) {
+          process.exit(0);
+        }
+        isShuttingDown = true;
         console.log(`\n${ANSI.yellow}Shutting down Ingest Web UI...${ANSI.reset}`);
-        server.stop().then(() => resolvePromise());
-      });
-      process.on("SIGTERM", () => {
-        server.stop().then(() => resolvePromise());
-      });
+        try {
+          await server.stop();
+        } catch {
+          // ignore already closed
+        }
+        resolvePromise();
+      };
+
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
     });
     return;
   }
@@ -442,6 +459,20 @@ export async function main(): Promise<void> {
     const { readFile } = await import("node:fs/promises");
     const content = await readFile(parsed.viewFile, "utf8");
     await showTerminalPager(content, parsed.viewFile.split("/").pop() || "Report");
+    return;
+  }
+
+  if (parsed.fixDiagramFile) {
+    const { readFile, writeFile } = await import("node:fs/promises");
+    const { repairReportMarkdown } = await import("./ai/repair.js");
+    const filePath = resolve(parsed.fixDiagramFile);
+    Logger.info(`Inspecting Mermaid diagrams in ${filePath}...`);
+    const content = await readFile(filePath, "utf8");
+    const config = await ConfigManager.load(parsed.configPath);
+    const provider = AIFactory.getProvider(config);
+    const result = await repairReportMarkdown(content, provider);
+    await writeFile(filePath, result.repairedMarkdown, "utf8");
+    Logger.success(`Repaired ${result.repairedCount} Mermaid diagram(s) in ${filePath}`);
     return;
   }
 

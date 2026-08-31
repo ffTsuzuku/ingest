@@ -305,6 +305,46 @@ export function renderDashboardHtml(): string {
       border: 1px solid var(--border-subtle);
     }
 
+    .token-badge {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      background: rgba(188, 140, 255, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(188, 140, 255, 0.3);
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .token-badge-header {
+      font-size: 12px;
+      padding: 3px 8px;
+      background: rgba(188, 140, 255, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(188, 140, 255, 0.3);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-fix-magic {
+      background: rgba(188, 140, 255, 0.12);
+      border-color: rgba(188, 140, 255, 0.35);
+      color: var(--accent-purple);
+    }
+
+    .btn-fix-magic:hover {
+      background: rgba(188, 140, 255, 0.25);
+      border-color: var(--accent-purple);
+      color: #fff;
+    }
+
     .report-meta-row {
       display: flex;
       align-items: center;
@@ -829,8 +869,10 @@ export function renderDashboardHtml(): string {
       <div class="viewer-header" id="viewer-header" style="display: none;">
         <div class="viewer-title-group">
           <div class="viewer-doc-title" id="viewer-doc-title">Report Title</div>
+          <span class="token-badge-header" id="viewer-token-badge" style="display: none;">⚡ 0 tokens</span>
         </div>
         <div class="viewer-actions">
+          <button class="btn btn-fix-magic" id="fix-diagram-btn" title="Inspect report and repair Mermaid diagram syntax with AI ( f )">✨ Fix Diagrams</button>
           <button class="btn" id="toggle-raw-btn">📝 View Raw</button>
           <button class="btn" id="copy-md-btn">📋 Copy Markdown</button>
           <button class="btn" id="download-btn">💾 Download</button>
@@ -919,6 +961,7 @@ export function renderDashboardHtml(): string {
         '<div class="mermaid-header">' +
           '<div class="mermaid-title">📊 Architecture & Flow Diagram</div>' +
           '<div class="mermaid-toolbar">' +
+            '<button class="diagram-btn btn-fix-mermaid btn-fix-magic" title="Repair syntax with AI">✨ Fix</button>' +
             '<button class="diagram-btn btn-zoom-out" title="Zoom Out (–)">➖</button>' +
             '<span class="diagram-zoom-level">100%</span>' +
             '<button class="diagram-btn btn-zoom-in" title="Zoom In (+)">➕</button>' +
@@ -1102,6 +1145,14 @@ export function renderDashboardHtml(): string {
 
     function formatCodeBlock(code, lang) {
       const escaped = escapeHtml(code);
+      const isDiff =
+        (lang && lang.toLowerCase() === 'diff') ||
+        ((!lang || lang.toLowerCase() === 'text') && /^(diff --git|@@)/m.test(code));
+
+      if (!isDiff) {
+        return escaped;
+      }
+
       const lines = escaped.split('\\n');
       return lines.map(line => {
         if (line.startsWith('+') && !line.startsWith('+++')) {
@@ -1112,6 +1163,9 @@ export function renderDashboardHtml(): string {
         }
         if (line.startsWith('@@')) {
           return '<span class="diff-line-chunk">' + line + '</span>';
+        }
+        if (line.startsWith('diff --git') || line.startsWith('---') || line.startsWith('+++')) {
+          return '<span style="color: var(--accent-yellow); font-weight: 600;">' + line + '</span>';
         }
         return line;
       }).join('\\n');
@@ -1217,6 +1271,16 @@ export function renderDashboardHtml(): string {
       }
     }
 
+    function formatTokens(tokenUsage) {
+      if (!tokenUsage || typeof tokenUsage.totalTokens !== 'number' || tokenUsage.totalTokens <= 0) {
+        return '⚡ Tokens: N/A';
+      }
+      const count = tokenUsage.totalTokens >= 1000000
+        ? (tokenUsage.totalTokens / 1000000).toFixed(1) + 'M'
+        : (tokenUsage.totalTokens >= 1000 ? (tokenUsage.totalTokens / 1000).toFixed(1) + 'k' : tokenUsage.totalTokens.toLocaleString());
+      return '⚡ ' + count + ' tokens';
+    }
+
     function renderReportList() {
       const listEl = document.getElementById('report-list');
       listEl.innerHTML = '';
@@ -1233,6 +1297,9 @@ export function renderDashboardHtml(): string {
         
         const styleName = rep.reportStyle || 'default';
         const badgeClass = rep.reportStyle === 'system-centric' ? 'style-badge system-centric' : 'style-badge default';
+        const tokenBadgeHtml = rep.tokenUsage && typeof rep.tokenUsage.totalTokens === 'number' && rep.tokenUsage.totalTokens > 0
+          ? '<span class="token-badge">⚡ ' + (rep.tokenUsage.totalTokens >= 1000 ? (rep.tokenUsage.totalTokens / 1000).toFixed(1) + 'k' : rep.tokenUsage.totalTokens) + '</span>'
+          : '<span class="token-badge" style="opacity: 0.6;">⚡ N/A</span>';
         
         li.innerHTML = \`
           <div class="report-date-row">
@@ -1241,6 +1308,8 @@ export function renderDashboardHtml(): string {
           </div>
           <div class="report-meta-row">
             <span>\${formatBytes(rep.sizeBytes)}</span>
+            <span>•</span>
+            \${tokenBadgeHtml}
             <span>•</span>
             <span>\${new Date(rep.modifiedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
@@ -1258,6 +1327,9 @@ export function renderDashboardHtml(): string {
         const res = await fetch('/api/report?repo=' + encodeURIComponent(report.repoName) + '&file=' + encodeURIComponent(report.fileName));
         const data = await res.json();
         state.rawMarkdown = data.content || '';
+        if (data.tokenUsage) {
+          state.selectedReport.tokenUsage = data.tokenUsage;
+        }
         renderReportView();
       } catch (err) {
         console.error('Failed to fetch report content', err);
@@ -1447,6 +1519,14 @@ export function renderDashboardHtml(): string {
           update();
         };
 
+        const btnFix = card.querySelector('.btn-fix-mermaid');
+        if (btnFix) {
+          btnFix.onclick = () => {
+            const raw = card.querySelector('.mermaid')?.textContent || '';
+            fixMermaidDiagram(raw);
+          };
+        }
+
         if (btnIn) btnIn.onclick = () => { scale *= 1.25; update(); };
         if (btnOut) btnOut.onclick = () => { scale *= 0.8; update(); };
         if (btnReset) btnReset.onclick = () => { scale = 1.0; translateX = 0; translateY = 0; update(); };
@@ -1462,6 +1542,7 @@ export function renderDashboardHtml(): string {
       const header = document.getElementById('viewer-header');
       const container = document.getElementById('viewer-container');
       const titleEl = document.getElementById('viewer-doc-title');
+      const tokenBadge = document.getElementById('viewer-token-badge');
 
       if (!state.selectedReport) {
         showEmptyViewer();
@@ -1471,6 +1552,9 @@ export function renderDashboardHtml(): string {
       header.style.display = 'flex';
       const styleSuffix = state.selectedReport.reportStyle ? ' (' + state.selectedReport.reportStyle + ')' : '';
       titleEl.textContent = state.selectedRepo + ' / ' + state.selectedReport.dateStr + styleSuffix;
+
+      tokenBadge.style.display = 'inline-flex';
+      tokenBadge.textContent = formatTokens(state.selectedReport.tokenUsage);
 
       if (state.showRaw) {
         container.innerHTML = '<div class="raw-viewer">' + escapeHtml(state.rawMarkdown) + '</div>';
@@ -1492,6 +1576,48 @@ export function renderDashboardHtml(): string {
       }
     }
 
+    async function fixMermaidDiagram(codeSnippet) {
+      if (!state.selectedReport) return;
+      const fixBtn = document.getElementById('fix-diagram-btn');
+      if (fixBtn) {
+        fixBtn.disabled = true;
+        fixBtn.textContent = '⏳ Fixing...';
+      }
+      showToast('🤖 AI is inspecting and repairing Mermaid diagram...');
+
+      try {
+        const res = await fetch('/api/fix-mermaid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repo: state.selectedReport.repoName,
+            file: state.selectedReport.fileName,
+            mermaidCode: typeof codeSnippet === 'string' && codeSnippet.trim().length > 0 ? codeSnippet : undefined
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Failed to repair diagram');
+        }
+
+        state.rawMarkdown = data.content;
+        if (data.tokenUsage) {
+          state.selectedReport.tokenUsage = data.tokenUsage;
+        }
+        renderReportView();
+        showToast('✨ Mermaid diagram repaired and saved!');
+      } catch (err) {
+        console.error('Failed to repair diagram', err);
+        showToast('❌ Repair failed: ' + err.message);
+      } finally {
+        if (fixBtn) {
+          fixBtn.disabled = false;
+          fixBtn.textContent = '✨ Fix Diagrams';
+        }
+      }
+    }
+
     function showEmptyViewer(msg) {
       document.getElementById('viewer-header').style.display = 'none';
       document.getElementById('viewer-container').innerHTML = \`
@@ -1509,6 +1635,8 @@ export function renderDashboardHtml(): string {
       if (state.selectedRepo) selectRepo(state.selectedRepo);
       showToast('Refreshed reports');
     });
+
+    document.getElementById('fix-diagram-btn').addEventListener('click', () => fixMermaidDiagram());
 
     document.getElementById('toggle-raw-btn').addEventListener('click', () => {
       state.showRaw = !state.showRaw;
@@ -1542,6 +1670,8 @@ export function renderDashboardHtml(): string {
         document.getElementById('repo-search').focus();
       } else if (e.key === 'c') {
         document.getElementById('copy-md-btn').click();
+      } else if (e.key === 'f') {
+        document.getElementById('fix-diagram-btn').click();
       }
     });
 
