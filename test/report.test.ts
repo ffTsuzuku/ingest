@@ -189,4 +189,80 @@ describe("Report Storage & Expiration", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("should parse report file names correctly for branch and style variants", () => {
+    // 1. Default report without branch
+    const p1 = ReportStorage.parseReportFileName("2026-08-31-summary.md");
+    assert.equal(p1.dateStr, "2026-08-31");
+    assert.equal(p1.branch, undefined);
+    assert.equal(p1.reportStyle, undefined);
+
+    // 2. Style-only report without branch
+    const p2 = ReportStorage.parseReportFileName("2026-08-31-system-centric-summary.md");
+    assert.equal(p2.dateStr, "2026-08-31");
+    assert.equal(p2.branch, undefined);
+    assert.equal(p2.reportStyle, "system-centric");
+
+    // 3. Branch-specific report with default style
+    const p3 = ReportStorage.parseReportFileName("2026-08-31-main-summary.md");
+    assert.equal(p3.dateStr, "2026-08-31");
+    assert.equal(p3.branch, "main");
+    assert.equal(p3.reportStyle, undefined);
+
+    // 4. Branch-specific report with custom style
+    const p4 = ReportStorage.parseReportFileName("2026-08-31-develop-system-centric-summary.md");
+    assert.equal(p4.dateStr, "2026-08-31");
+    assert.equal(p4.branch, "develop");
+    assert.equal(p4.reportStyle, "system-centric");
+
+    // 5. Date range with branch and style
+    const p5 = ReportStorage.parseReportFileName("2026-08-01-to-2026-08-07-feature-auth-security-summary.md");
+    assert.equal(p5.dateStr, "2026-08-01-to-2026-08-07");
+    assert.equal(p5.branch, "feature-auth");
+    assert.equal(p5.reportStyle, "security");
+  });
+
+  it("should generate and save separate reports per branch for multiple branches without overwriting", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-multi-branch-"));
+    try {
+      const branches = ["main", "feature/auth-v2"];
+
+      const savedReports = [];
+      for (const branch of branches) {
+        const saved = await ReportStorage.saveReport(
+          tempDir,
+          {
+            repoName: "multi-branch-repo",
+            repoPath: "/tmp/multi-branch-repo",
+            branches: [branch],
+            branch,
+            dateStr: "2026-08-31",
+            generatedAt: new Date().toISOString(),
+            providerLabel: "antigravity",
+            commitCount: branch === "main" ? 3 : 5,
+          },
+          `# multi-branch-repo (${branch}) - 2026-08-31\n\nBranch specific summary for ${branch}`,
+        );
+        savedReports.push(saved);
+      }
+
+      assert.equal(savedReports.length, 2);
+      assert.ok(savedReports[0]?.filePath.endsWith("multi-branch-repo/2026-08-31-main-summary.md"));
+      assert.ok(savedReports[1]?.filePath.endsWith("multi-branch-repo/2026-08-31-feature-auth-v2-summary.md"));
+      assert.notEqual(savedReports[0]?.filePath, savedReports[1]?.filePath);
+
+      const list = await ReportStorage.listReports(tempDir);
+      assert.equal(list.length, 2);
+
+      const mainReport = list.find((r) => r.branch === "main");
+      const featReport = list.find((r) => r.branch === "feature-auth-v2" || r.branch === "feature/auth-v2");
+
+      assert.ok(mainReport);
+      assert.ok(featReport);
+      assert.equal(mainReport?.fileName, "2026-08-31-main-summary.md");
+      assert.equal(featReport?.fileName, "2026-08-31-feature-auth-v2-summary.md");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

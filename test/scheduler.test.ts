@@ -49,7 +49,6 @@ describe("Scheduler Status Formatting", () => {
         isExpired: false,
         plistPath: "/Users/test/Library/LaunchAgents/com.tsuzuku.ingest.plist",
         logPath: "/tmp/ingest-launchd.log",
-        isLegacy: false,
       },
       {
         active: false,

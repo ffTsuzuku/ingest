@@ -9,7 +9,6 @@ import { existsSync } from "node:fs";
 
 export const DEFAULT_CONFIG_DIR = join(homedir(), ".config", "ingest");
 export const DEFAULT_CONFIG_PATH = join(DEFAULT_CONFIG_DIR, "config.jsonc");
-export const LEGACY_CONFIG_PATH = join(homedir(), ".config", "git-ingest", "config.jsonc");
 export const DEFAULT_OUTPUT_ROOT = join(homedir(), "reports");
 export const DEFAULT_RETENTION_DAYS = 30;
 export const DEFAULT_ERROR_LOG = "error.log";
@@ -198,10 +197,7 @@ export class ConfigManager {
   }
 
   public static async load(customPath?: string, cwd = process.cwd()): Promise<AppConfig> {
-    let rawPath = customPath || DEFAULT_CONFIG_PATH;
-    if (!customPath && !existsSync(DEFAULT_CONFIG_PATH) && existsSync(LEGACY_CONFIG_PATH)) {
-      rawPath = LEGACY_CONFIG_PATH;
-    }
+    const rawPath = customPath || DEFAULT_CONFIG_PATH;
     const resolvedConfigPath = resolveConfiguredPath(rawPath);
     const configDir = dirname(resolvedConfigPath);
 

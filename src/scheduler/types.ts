@@ -17,7 +17,6 @@ export interface ScheduleStatus {
   nextRun?: string;
   label?: string;
   plistPath?: string;
-  isLegacy?: boolean;
   scheduleTime?: string;
   cronExpr?: string;
   command?: string;

@@ -32,6 +32,7 @@ description: >-
      ingest --repo /path/to/repo --date 2026-04-01..2026-04-07
      ingest --repo /path/to/repo --since 2026-04-01 --until 2026-04-07
      ```
+   - When multiple branches are configured (e.g. `["main", "dev"]`), `ingest` generates dedicated reports per each branch (e.g. `YYYY-MM-DD-main-summary.md` and `YYYY-MM-DD-dev-summary.md`).
    - Enable deep-dive code diff analysis and select report styles:
      ```bash
      ingest --repo /path/to/repo --diff

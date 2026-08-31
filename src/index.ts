@@ -241,15 +241,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
       const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
 
-      console.log(`\n\x1b[1mAnalyzing repo:\x1b[0m \x1b[36m${repoName}\x1b[0m (${repoPath})`);
-
-      const commits = await fetchRepoCommits(repoPath, branches, dateFilter);
-      Logger.info(`Found ${commits.length} commits across [${branches.join(", ")}].`);
-
-      let diffStat;
-      if ((parsed.diffMode || effectiveRepo.diff_mode !== false) && commits.length > 0) {
-        diffStat = await fetchDiffStat(repoPath, branches, dateFilter, effectiveRepo.max_diff_lines);
-      }
+      console.log(`\n\x1b[1mAnalyzing repo:\x1b[0m \x1b[36m${repoName}\x1b[0m (${repoPath}) [${branches.length} branch(es): ${branches.join(", ")}]`);
 
       const activePrompt = await resolveRepoPrompt(
         config.prompt,
@@ -260,40 +252,56 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
 
       const effectiveStyle = parsed.reportStyle || effectiveRepo.report_style || config.reportStyle || "default";
 
-      const analysisContext = {
-        repoName,
-        repoPath,
-        branches,
-        dateStr,
-        commits,
-        diffStat,
-        customPrompt: activePrompt,
-        basePrompt: config.prompt,
-        reportStyle: effectiveStyle,
-      };
+      for (const branch of branches) {
+        try {
+          console.log(`\n  \x1b[1mBranch:\x1b[0m \x1b[35m${branch}\x1b[0m`);
+          const commits = await fetchRepoCommits(repoPath, [branch], dateFilter);
+          Logger.info(`Found ${commits.length} commits on branch "${branch}".`);
 
-      let reportMarkdown = "";
-      let reportMeta;
+          let diffStat;
+          if ((parsed.diffMode || effectiveRepo.diff_mode !== false) && commits.length > 0) {
+            diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines);
+          }
 
-      if (commits.length === 0) {
-        Logger.info(`No commits found for ${repoName}. Generating empty report.`);
-        const res = generateEmptyReport(analysisContext);
-        reportMarkdown = res.markdown;
-        reportMeta = res.meta;
-      } else {
-        Logger.info(`Calling AI provider (${config.defaultProvider})...`);
-        const provider = AIFactory.getProvider(config);
-        const aiResult = await provider.analyze(analysisContext);
-        const res = formatReportMarkdown(analysisContext, aiResult);
-        reportMarkdown = res.markdown;
-        reportMeta = res.meta;
+          const analysisContext = {
+            repoName,
+            repoPath,
+            branches: [branch],
+            branch,
+            dateStr,
+            commits,
+            diffStat,
+            customPrompt: activePrompt,
+            basePrompt: config.prompt,
+            reportStyle: effectiveStyle,
+          };
+
+          let reportMarkdown = "";
+          let reportMeta;
+
+          if (commits.length === 0) {
+            Logger.info(`No commits found for ${repoName} on branch "${branch}". Generating empty report.`);
+            const res = generateEmptyReport(analysisContext);
+            reportMarkdown = res.markdown;
+            reportMeta = res.meta;
+          } else {
+            Logger.info(`Calling AI provider (${config.defaultProvider})...`);
+            const provider = AIFactory.getProvider(config);
+            const aiResult = await provider.analyze(analysisContext);
+            const res = formatReportMarkdown(analysisContext, aiResult);
+            reportMarkdown = res.markdown;
+            reportMeta = res.meta;
+          }
+
+          const saved = await ReportStorage.saveReport(config.outputRoot, reportMeta, reportMarkdown);
+          const tokenInfo = reportMeta?.tokenUsage?.totalTokens
+            ? ` (${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
+            : "";
+          Logger.success(`Report for [${branch}] written to ${saved.filePath}${tokenInfo}`);
+        } catch (branchErr) {
+          await Logger.error(`Failed to generate report for ${repo.path} on branch ${branch}`, branchErr);
+        }
       }
-
-      const saved = await ReportStorage.saveReport(config.outputRoot, reportMeta, reportMarkdown);
-      const tokenInfo = reportMeta?.tokenUsage?.totalTokens
-        ? ` (${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
-        : "";
-      Logger.success(`Report written to ${saved.filePath}${tokenInfo}`);
     } catch (err) {
       await Logger.error(`Failed to generate report for ${repo.path}`, err);
     }

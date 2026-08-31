@@ -306,18 +306,7 @@ export class InteractiveTUI {
       const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
       const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
 
-      console.log(`\n${ANSI.bold}Processing:${ANSI.reset} ${ANSI.cyan}${repoName}${ANSI.reset} (${repoPath})`);
-
-      const commits = await fetchRepoCommits(repoPath, branches, dateFilter);
-      console.log(`  Found ${ANSI.green}${commits.length}${ANSI.reset} commits across branches [${branches.join(", ")}].`);
-
-      let diffStat;
-      if (diffDeepDive && commits.length > 0) {
-        diffStat = await fetchDiffStat(repoPath, branches, dateFilter, effectiveRepo.max_diff_lines);
-        if (diffStat) {
-          console.log(`  Diff Stat: ${diffStat.filesChangedCount} files changed (+${diffStat.insertions}, -${diffStat.deletions}).`);
-        }
-      }
+      console.log(`\n${ANSI.bold}Processing:${ANSI.reset} ${ANSI.cyan}${repoName}${ANSI.reset} (${repoPath}) [${branches.length} branch(es): ${branches.join(", ")}]`);
 
       const activePrompt = await resolveRepoPrompt(
         ctx.config.prompt,
@@ -328,40 +317,57 @@ export class InteractiveTUI {
 
       const effectiveStyle = effectiveRepo.report_style || ctx.config.reportStyle || "default";
 
-      const analysisContext = {
-        repoName,
-        repoPath,
-        branches,
-        dateStr,
-        commits,
-        diffStat,
-        customPrompt: activePrompt,
-        basePrompt: ctx.config.prompt,
-        reportStyle: effectiveStyle,
-      };
+      for (const branch of branches) {
+        console.log(`\n  ${ANSI.bold}Branch:${ANSI.reset} ${ANSI.magenta}${branch}${ANSI.reset}`);
+        const commits = await fetchRepoCommits(repoPath, [branch], dateFilter);
+        console.log(`  Found ${ANSI.green}${commits.length}${ANSI.reset} commits on branch "${branch}".`);
 
-      let reportMarkdown = "";
-      let reportMeta;
+        let diffStat;
+        if (diffDeepDive && commits.length > 0) {
+          diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines);
+          if (diffStat) {
+            console.log(`  Diff Stat: ${diffStat.filesChangedCount} files changed (+${diffStat.insertions}, -${diffStat.deletions}).`);
+          }
+        }
 
-      if (commits.length === 0) {
-        console.log(`  ${ANSI.yellow}No commits found. Generating empty report.${ANSI.reset}`);
-        const res = generateEmptyReport(analysisContext);
-        reportMarkdown = res.markdown;
-        reportMeta = res.meta;
-      } else {
-        console.log(`  ${ANSI.magenta} Calling AI Provider (${ctx.config.defaultProvider})...${ANSI.reset}`);
-        const provider = AIFactory.getProvider(ctx.config);
-        const aiResult = await provider.analyze(analysisContext);
-        const res = formatReportMarkdown(analysisContext, aiResult);
-        reportMarkdown = res.markdown;
-        reportMeta = res.meta;
+        const analysisContext = {
+          repoName,
+          repoPath,
+          branches: [branch],
+          branch,
+          dateStr,
+          commits,
+          diffStat,
+          customPrompt: activePrompt,
+          basePrompt: ctx.config.prompt,
+          reportStyle: effectiveStyle,
+        };
+
+        let reportMarkdown = "";
+        let reportMeta;
+
+        if (commits.length === 0) {
+          console.log(`  ${ANSI.yellow}No commits found on branch "${branch}". Generating empty report.${ANSI.reset}`);
+          const res = generateEmptyReport(analysisContext);
+          reportMarkdown = res.markdown;
+          reportMeta = res.meta;
+        } else {
+          console.log(`  ${ANSI.magenta} Calling AI Provider (${ctx.config.defaultProvider})...${ANSI.reset}`);
+          const provider = AIFactory.getProvider(ctx.config);
+          const aiResult = await provider.analyze(analysisContext);
+          const res = formatReportMarkdown(analysisContext, aiResult);
+          reportMarkdown = res.markdown;
+          reportMeta = res.meta;
+        }
+
+        const saved = await ReportStorage.saveReport(ctx.config.outputRoot, reportMeta, reportMarkdown);
+        const tokenInfo = reportMeta?.tokenUsage?.totalTokens
+          ? ` ${ANSI.magenta}[⚡ ${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens]${ANSI.reset}`
+          : "";
+        console.log(`  ${ANSI.green}✔ Report saved to:${ANSI.reset} ${saved.filePath}${tokenInfo}`);
+
+        await showTerminalPager(reportMarkdown, `${repoName} (${branch}) - ${dateStr}`);
       }
-
-      const saved = await ReportStorage.saveReport(ctx.config.outputRoot, reportMeta, reportMarkdown);
-      const tokenInfo = reportMeta?.tokenUsage?.totalTokens
-        ? ` ${ANSI.magenta}[⚡ ${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens]${ANSI.reset}`
-        : "";
-      console.log(`  ${ANSI.green}✔ Report saved to:${ANSI.reset} ${saved.filePath}${tokenInfo}`);
 
       if (ctx.config.retentionDays > 0) {
         const deleted = await ReportStorage.cleanExpiredReports(ctx.config.outputRoot, ctx.config.retentionDays);
@@ -369,8 +375,6 @@ export class InteractiveTUI {
           console.log(`  ${ANSI.dim}Auto-cleaned ${deleted.length} expired report(s) (> ${ctx.config.retentionDays} days old).${ANSI.reset}`);
         }
       }
-
-      await showTerminalPager(reportMarkdown, `${repoName} - ${dateStr}`);
     }
   }
 
@@ -386,8 +390,9 @@ export class InteractiveTUI {
 
       const choices = reports.slice(0, 30).map((r) => {
         const styleSuffix = r.reportStyle ? ` (${r.reportStyle})` : "";
+        const branchSuffix = r.branch ? ` [ ${r.branch}]` : "";
         return {
-          label: ` ${r.repoName} [${r.dateStr}${styleSuffix}]`,
+          label: ` ${r.repoName}${branchSuffix} [${r.dateStr}${styleSuffix}]`,
           value: r.filePath,
           hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
         };

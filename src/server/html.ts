@@ -1353,6 +1353,9 @@ export function renderDashboardHtml(): string {
         
         const styleName = rep.reportStyle || 'default';
         const badgeClass = rep.reportStyle === 'system-centric' ? 'style-badge system-centric' : 'style-badge default';
+        const branchBadgeHtml = rep.branch
+          ? '<span class="style-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);"> ' + escapeHtml(rep.branch) + '</span>'
+          : '';
         const tokenBadgeHtml = rep.tokenUsage && typeof rep.tokenUsage.totalTokens === 'number' && rep.tokenUsage.totalTokens > 0
           ? '<span class="token-badge">⚡ ' + (rep.tokenUsage.totalTokens >= 1000 ? (rep.tokenUsage.totalTokens / 1000).toFixed(1) + 'k' : rep.tokenUsage.totalTokens) + '</span>'
           : '<span class="token-badge" style="opacity: 0.6;">⚡ N/A</span>';
@@ -1360,6 +1363,7 @@ export function renderDashboardHtml(): string {
         li.innerHTML = \`
           <div class="report-date-row">
             <span class="report-date">📅 \${escapeHtml(rep.dateStr)}</span>
+            \${branchBadgeHtml}
             <span class="\${badgeClass}">\${escapeHtml(styleName)}</span>
           </div>
           <div class="report-meta-row">
@@ -1606,8 +1610,9 @@ export function renderDashboardHtml(): string {
       }
 
       header.style.display = 'flex';
+      const branchSuffix = state.selectedReport.branch ? ' [' + state.selectedReport.branch + ']' : '';
       const styleSuffix = state.selectedReport.reportStyle ? ' (' + state.selectedReport.reportStyle + ')' : '';
-      titleEl.textContent = state.selectedRepo + ' / ' + state.selectedReport.dateStr + styleSuffix;
+      titleEl.textContent = state.selectedRepo + ' / ' + state.selectedReport.dateStr + branchSuffix + styleSuffix;
 
       tokenBadge.style.display = 'inline-flex';
       tokenBadge.textContent = formatTokens(state.selectedReport.tokenUsage);

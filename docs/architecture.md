@@ -62,8 +62,8 @@ graph TD
 - **`factory.ts`**: Instantiates and selects the appropriate provider based on active configuration.
 
 ### 2.4. `src/report/`
-- **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown with exact token counts in the metadata footer.
-- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports with token usage (`listReports`), lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
+- **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown with exact token counts and branch context in the metadata footer.
+- **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD[-<branch>][-<style>]-summary.md`), creates missing directories, scans past reports with token usage and branch metadata (`listReports`), parses branch and style filename variants (`parseReportFileName`), lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
 - **`graph.ts`**: Zero-dependency 2D Unicode & ANSI graph layout engine. Implements topological ranking, character matrix plotting, box-drawing, corner routing, and branch arrow rendering for Mermaid flowcharts directly in terminal character grids.
 - **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting, responsive table cell wrapping, and dual-mode diagram formatting (2D box flow vs structured component map).
 

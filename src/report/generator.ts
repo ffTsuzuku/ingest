@@ -6,10 +6,12 @@ export function formatReportMarkdown(
   result: AnalysisResult,
 ): { markdown: string; meta: ReportMeta } {
   const generatedAt = new Date().toISOString();
+  const branch = context.branch || (context.branches.length === 1 ? context.branches[0] : undefined);
   const meta: ReportMeta = {
     repoName: context.repoName,
     repoPath: context.repoPath,
     branches: context.branches,
+    branch,
     dateStr: context.dateStr,
     generatedAt,
     providerLabel: result.providerLabel,
@@ -31,7 +33,8 @@ export function formatReportMarkdown(
   }
 
   // Append footer metadata comment
-  const footer = `\n\n---\n*Generated on ${generatedAt} via \`${result.providerLabel}\` (${context.commits.length} commits analyzed across branches: ${context.branches.join(", ")})${tokenStr}*\n`;
+  const branchDesc = branch ? `branch: ${branch}` : `branches: ${context.branches.join(", ")}`;
+  const footer = `\n\n---\n*Generated on ${generatedAt} via \`${result.providerLabel}\` (${context.commits.length} commits analyzed across ${branchDesc})${tokenStr}*\n`;
 
   return {
     markdown: content + footer,
@@ -41,16 +44,20 @@ export function formatReportMarkdown(
 
 export function generateEmptyReport(context: AnalysisContext): { markdown: string; meta: ReportMeta } {
   const generatedAt = new Date().toISOString();
+  const branch = context.branch || (context.branches.length === 1 ? context.branches[0] : undefined);
   const meta: ReportMeta = {
     repoName: context.repoName,
     repoPath: context.repoPath,
     branches: context.branches,
+    branch,
     dateStr: context.dateStr,
     generatedAt,
     providerLabel: "ingest:none",
     commitCount: 0,
     reportStyle: context.reportStyle,
   };
+
+  const branchDesc = branch ? `branch: ${branch}` : `branches: ${context.branches.join(", ")}`;
 
   const markdown = `# ${context.repoName} - ${context.dateStr}
 
@@ -70,7 +77,7 @@ No changes to configuration, APIs, or dependencies.
 None
 
 ---
-*Generated on ${generatedAt} (0 commits analyzed across branches: ${context.branches.join(", ")})*
+*Generated on ${generatedAt} (0 commits analyzed across ${branchDesc})*
 `;
 
   return { markdown, meta };

@@ -6,6 +6,7 @@ export interface ReportMeta {
   repoName: string;
   repoPath: string;
   branches: string[];
+  branch?: string;
   dateStr: string;
   generatedAt: string;
   providerLabel: string;
@@ -25,6 +26,7 @@ export interface ReportSummary {
   fileName: string;
   repoName: string;
   dateStr: string;
+  branch?: string;
   sizeBytes: number;
   modifiedAt: Date;
   reportStyle?: string;

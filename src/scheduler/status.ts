@@ -21,9 +21,8 @@ export function formatScheduleLines(launchdStatus: ScheduleStatus | null, cronSt
     lines.push(`${ANSI.bold}${ANSI.brightCyan}macOS LaunchAgent${ANSI.reset}  ${badge}`);
 
     if (launchdStatus.active) {
-      const legacyTag = launchdStatus.isLegacy ? ` ${ANSI.yellow}(Legacy)${ANSI.reset}` : "";
       if (launchdStatus.label) {
-        lines.push(`  ${ANSI.dim}Label:${ANSI.reset}     ${ANSI.cyan}${launchdStatus.label}${ANSI.reset}${legacyTag}`);
+        lines.push(`  ${ANSI.dim}Label:${ANSI.reset}     ${ANSI.cyan}${launchdStatus.label}${ANSI.reset}`);
       }
       if (launchdStatus.scheduleTime) {
         lines.push(`  ${ANSI.dim}Schedule:${ANSI.reset}  ${ANSI.brightGreen}${launchdStatus.scheduleTime}${ANSI.reset}`);
@@ -54,9 +53,8 @@ export function formatScheduleLines(launchdStatus: ScheduleStatus | null, cronSt
   lines.push(`${ANSI.bold}${ANSI.brightCyan}Crontab${ANSI.reset}            ${cronBadge}`);
 
   if (cronStatus.active) {
-    const legacyTag = cronStatus.isLegacy ? ` ${ANSI.yellow}(Legacy)${ANSI.reset}` : "";
     if (cronStatus.cronExpr) {
-      lines.push(`  ${ANSI.dim}Schedule:${ANSI.reset}  ${ANSI.brightGreen}${cronStatus.cronExpr}${ANSI.reset}${legacyTag}`);
+      lines.push(`  ${ANSI.dim}Schedule:${ANSI.reset}  ${ANSI.brightGreen}${cronStatus.cronExpr}${ANSI.reset}`);
     }
     if (cronStatus.expiresAt) {
       const isExp = cronStatus.isExpired;

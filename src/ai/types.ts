@@ -5,6 +5,7 @@ export interface AnalysisContext {
   repoName: string;
   repoPath: string;
   branches: string[];
+  branch?: string;
   dateStr: string;
   commits: CommitRecord[];
   diffStat?: DiffStat;

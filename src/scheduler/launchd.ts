@@ -8,8 +8,6 @@ import type { ScheduleConfig, ScheduleStatus } from "./types.js";
 
 const PLIST_LABEL = "com.tsuzuku.ingest";
 const PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${PLIST_LABEL}.plist`);
-const LEGACY_PLIST_LABEL = "com.tsuzuku.git-ingest";
-const LEGACY_PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${LEGACY_PLIST_LABEL}.plist`);
 
 export class LaunchdScheduler {
   public static isMacOS(): boolean {
@@ -90,14 +88,6 @@ export class LaunchdScheduler {
     const plistContent = this.generatePlist(config);
     await mkdir(dirname(PLIST_PATH), { recursive: true });
 
-    // Unload legacy if present
-    try {
-      await executeCommand("launchctl", ["unload", LEGACY_PLIST_PATH]);
-      await unlink(LEGACY_PLIST_PATH);
-    } catch {
-      // Ignored
-    }
-
     // Unload existing if present
     try {
       await executeCommand("launchctl", ["unload", PLIST_PATH]);
@@ -120,13 +110,6 @@ export class LaunchdScheduler {
 
     try {
       await unlink(PLIST_PATH);
-    } catch {
-      // Ignored
-    }
-
-    try {
-      await executeCommand("launchctl", ["unload", LEGACY_PLIST_PATH]);
-      await unlink(LEGACY_PLIST_PATH);
     } catch {
       // Ignored
     }
@@ -166,7 +149,6 @@ export class LaunchdScheduler {
         details: active ? `LaunchAgent loaded (${PLIST_LABEL})` : `Plist file exists at ${PLIST_PATH} but not currently loaded.`,
         label: PLIST_LABEL,
         plistPath: PLIST_PATH,
-        isLegacy: false,
         scheduleTime,
         expiresAt,
         isExpired,
@@ -174,40 +156,11 @@ export class LaunchdScheduler {
         errorLogPath: "/tmp/ingest-launchd-error.log",
       };
     } catch {
-      try {
-        await access(LEGACY_PLIST_PATH);
-        const res = await executeCommand("launchctl", ["list", LEGACY_PLIST_LABEL]);
-        const active = res.exitCode === 0;
-        let scheduleTime: string | undefined;
-        try {
-          const content = await readFile(LEGACY_PLIST_PATH, "utf8");
-          const hourMatch = content.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
-          const minMatch = content.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
-          if (hourMatch && minMatch) {
-            scheduleTime = `Daily at ${hourMatch[1].padStart(2, "0")}:${minMatch[1].padStart(2, "0")}`;
-          }
-        } catch {
-          // Ignored
-        }
-
-        return {
-          active,
-          type: "launchd",
-          details: active ? `Legacy LaunchAgent loaded (${LEGACY_PLIST_LABEL})` : `Legacy plist file exists at ${LEGACY_PLIST_PATH} but not currently loaded.`,
-          label: LEGACY_PLIST_LABEL,
-          plistPath: LEGACY_PLIST_PATH,
-          isLegacy: true,
-          scheduleTime,
-          logPath: "/tmp/ingest-launchd.log",
-          errorLogPath: "/tmp/ingest-launchd-error.log",
-        };
-      } catch {
-        return {
-          active: false,
-          type: "none",
-          details: "No active LaunchAgent plist found.",
-        };
-      }
+      return {
+        active: false,
+        type: "none",
+        details: "No active LaunchAgent plist found.",
+      };
     }
   }
 }

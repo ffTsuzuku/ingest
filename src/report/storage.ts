@@ -9,12 +9,61 @@ export class ReportStorage {
     repoName: string,
     dateStr: string,
     reportStyle?: string,
+    branch?: string,
   ): string {
+    const branchSuffix =
+      branch && branch.trim() !== ""
+        ? `-${branch.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "-")}`
+        : "";
     const styleSuffix =
       reportStyle && reportStyle !== "default" && reportStyle.trim() !== ""
         ? `-${reportStyle.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`
         : "";
-    return join(outputRoot, repoName, `${dateStr}${styleSuffix}-summary.md`);
+    return join(outputRoot, repoName, `${dateStr}${branchSuffix}${styleSuffix}-summary.md`);
+  }
+
+  public static parseReportFileName(fileName: string): {
+    dateStr: string;
+    branch?: string;
+    reportStyle?: string;
+  } {
+    const match = fileName.match(/^(\d{4}-\d{2}-\d{2}(?:-to-\d{4}-\d{2}-\d{2})?)(?:-(.+?))?-summary\.md$/);
+    if (!match) {
+      const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2}(?:-to-(\d{4}-\d{2}-\d{2}))?)/);
+      const dateStr = dateMatch ? (dateMatch[1] ?? fileName) : fileName.replace(/-summary\.md$/, "");
+      return { dateStr };
+    }
+
+    const dateStr = match[1]!;
+    const extra = match[2];
+
+    if (!extra) {
+      return { dateStr };
+    }
+
+    const KNOWN_STYLES = new Set(["system-centric", "default", "changelog", "security"]);
+
+    if (KNOWN_STYLES.has(extra)) {
+      return { dateStr, reportStyle: extra };
+    }
+
+    for (const style of KNOWN_STYLES) {
+      if (extra.endsWith(`-${style}`)) {
+        const branchPart = extra.slice(0, -(style.length + 1));
+        if (branchPart.length > 0) {
+          return {
+            dateStr,
+            branch: branchPart,
+            reportStyle: style,
+          };
+        }
+      }
+    }
+
+    return {
+      dateStr,
+      branch: extra,
+    };
   }
 
   public static async saveReport(
@@ -22,7 +71,7 @@ export class ReportStorage {
     meta: ReportMeta,
     markdownContent: string,
   ): Promise<GeneratedReport> {
-    const filePath = this.getReportFilePath(outputRoot, meta.repoName, meta.dateStr, meta.reportStyle);
+    const filePath = this.getReportFilePath(outputRoot, meta.repoName, meta.dateStr, meta.reportStyle, meta.branch);
     const targetDir = join(outputRoot, meta.repoName);
 
     await mkdir(targetDir, { recursive: true });
@@ -53,15 +102,21 @@ export class ReportStorage {
             if (file.isFile() && file.name.endsWith(".md")) {
               const fullPath = join(repoDir, file.name);
               const fileStats = await stat(fullPath);
-              const styleMatch = file.name.match(/^(\d{4}-\d{2}-\d{2}(?:-to-\d{4}-\d{2}-\d{2})?)(?:-(.+?))?-summary\.md$/);
-              const dateMatch = file.name.match(/^(\d{4}-\d{2}-\d{2}(?:-to-(\d{4}-\d{2}-\d{2}))?)/);
-              const dateStr = styleMatch ? (styleMatch[1] ?? file.name) : (dateMatch ? (dateMatch[1] ?? file.name) : file.name.replace(/-summary\.md$/, ""));
-              const reportStyle = styleMatch && styleMatch[2] ? styleMatch[2] : undefined;
+              const parsed = this.parseReportFileName(file.name);
+              const dateStr = parsed.dateStr;
+              let reportStyle = parsed.reportStyle;
+              let branch = parsed.branch;
 
               let tokenUsage: TokenUsage | undefined = undefined;
               try {
                 const content = await readFile(fullPath, "utf8");
                 tokenUsage = parseTokenUsageFromMarkdown(content) || undefined;
+                if (!branch) {
+                  const branchMatch = content.match(/commits analyzed across branch:\s*([^\s)]+)/i);
+                  if (branchMatch && branchMatch[1]) {
+                    branch = branchMatch[1];
+                  }
+                }
               } catch {
                 // Ignore read error
               }
@@ -71,6 +126,7 @@ export class ReportStorage {
                 fileName: file.name,
                 repoName,
                 dateStr,
+                branch,
                 sizeBytes: fileStats.size,
                 modifiedAt: fileStats.mtime,
                 reportStyle,
@@ -86,10 +142,13 @@ export class ReportStorage {
       // Output root might not exist yet
     }
 
-    // Sort by date descending, then by modification time descending
+    // Sort by date descending, then by branch ascending, then by modification time descending
     return reports.sort((a, b) => {
       const dateCmp = b.dateStr.localeCompare(a.dateStr);
       if (dateCmp !== 0) return dateCmp;
+      if (a.branch && b.branch && a.branch !== b.branch) {
+        return a.branch.localeCompare(b.branch);
+      }
       return b.modifiedAt.getTime() - a.modifiedAt.getTime();
     });
   }

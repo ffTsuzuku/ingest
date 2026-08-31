@@ -5,8 +5,6 @@ import type { ScheduleConfig, ScheduleStatus } from "./types.js";
 
 const CRON_START_TAG = "# BEGIN INGEST AUTOMATION";
 const CRON_END_TAG = "# END INGEST AUTOMATION";
-const LEGACY_CRON_START_TAG = "# BEGIN GIT-INGEST AUTOMATION";
-const LEGACY_CRON_END_TAG = "# END GIT-INGEST AUTOMATION";
 
 export class CronScheduler {
   public static resolveEntrypoint(): string {
@@ -60,11 +58,6 @@ export class CronScheduler {
     const managedBlock = `${CRON_START_TAG}\n${cronExpr} ${commandLine}\n${CRON_END_TAG}`;
 
     let newContent = existing;
-    if (newContent.includes(LEGACY_CRON_START_TAG)) {
-      const legacyRegex = new RegExp(`\\n?${LEGACY_CRON_START_TAG}[\\s\\S]*?${LEGACY_CRON_END_TAG}\\n?`, "g");
-      newContent = newContent.replace(legacyRegex, "");
-    }
-
     if (newContent.includes(CRON_START_TAG)) {
       const regex = new RegExp(`${CRON_START_TAG}[\\s\\S]*?${CRON_END_TAG}`, "g");
       newContent = newContent.replace(regex, managedBlock);
@@ -77,14 +70,10 @@ export class CronScheduler {
 
   public static async uninstall(): Promise<void> {
     const existing = await this.getCrontab();
-    if (!existing.includes(CRON_START_TAG) && !existing.includes(LEGACY_CRON_START_TAG)) return;
+    if (!existing.includes(CRON_START_TAG)) return;
 
-    let updated = existing;
     const regex = new RegExp(`\\n?${CRON_START_TAG}[\\s\\S]*?${CRON_END_TAG}\\n?`, "g");
-    updated = updated.replace(regex, "");
-
-    const legacyRegex = new RegExp(`\\n?${LEGACY_CRON_START_TAG}[\\s\\S]*?${LEGACY_CRON_END_TAG}\\n?`, "g");
-    updated = updated.replace(legacyRegex, "").trim();
+    const updated = existing.replace(regex, "").trim();
 
     if (updated) {
       await this.setCrontab(updated + "\n");
@@ -122,23 +111,6 @@ export class CronScheduler {
         command,
         expiresAt,
         isExpired,
-        isLegacy: false,
-        logPath: "/tmp/ingest-cron.log",
-      };
-    }
-    if (crontab.includes(LEGACY_CRON_START_TAG)) {
-      const match = crontab.match(new RegExp(`${LEGACY_CRON_START_TAG}\\n([\\s\\S]*?)\\n${LEGACY_CRON_END_TAG}`));
-      const line = (match?.[1] || "").trim();
-      const parts = line.split(/\s+/);
-      const cronExpr = parts.length >= 5 ? parts.slice(0, 5).join(" ") : line;
-      const command = parts.length >= 6 ? parts.slice(5).join(" ") : undefined;
-      return {
-        active: true,
-        type: "cron",
-        details: `Active Legacy Cron Job: ${line}`,
-        cronExpr,
-        command,
-        isLegacy: true,
         logPath: "/tmp/ingest-cron.log",
       };
     }
