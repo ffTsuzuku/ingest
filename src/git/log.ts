@@ -87,6 +87,80 @@ export async function fetchBranchCommits(
   return commits;
 }
 
+
+export function parseCompareRange(compareStr: string): {
+  baseRef: string;
+  targetRef: string;
+  range: string;
+  operator: ".." | "...";
+} {
+  const trimmed = compareStr.trim();
+  if (trimmed.includes("...")) {
+    const parts = trimmed.split("...");
+    const baseRef = parts[0]?.trim() || "HEAD~1";
+    const targetRef = parts[1]?.trim() || "HEAD";
+    return { baseRef, targetRef, range: `${baseRef}...${targetRef}`, operator: "..." };
+  }
+  if (trimmed.includes("..")) {
+    const parts = trimmed.split("..");
+    const baseRef = parts[0]?.trim() || "HEAD~1";
+    const targetRef = parts[1]?.trim() || "HEAD";
+    return { baseRef, targetRef, range: `${baseRef}..${targetRef}`, operator: ".." };
+  }
+  return { baseRef: trimmed, targetRef: "HEAD", range: `${trimmed}..HEAD`, operator: ".." };
+}
+
+/**
+ * Fetch commits between two arbitrary Git references (branches, tags, or commit hashes)
+ * without requiring temporal date filtering.
+ */
+export async function getCommitsBetweenRefs(
+  repoPath: string,
+  baseRef: string,
+  targetRef?: string,
+): Promise<CommitRecord[]> {
+  const range = targetRef && !baseRef.includes("..") ? `${baseRef}..${targetRef}` : baseRef;
+  const format = `${COMMIT_DELIMITER}%n%H%n%an%n%ae%n%cI%n%s%n%b`;
+  const gitArgs = ["log", range, `--format=${format}`];
+  const res = await runGit(gitArgs, repoPath);
+
+  if (res.exitCode !== 0 || !res.stdout) {
+    return [];
+  }
+
+  const rawBlocks = res.stdout.split(COMMIT_DELIMITER).map((b) => b.trim()).filter((b) => b.length > 0);
+  const commits: CommitRecord[] = [];
+
+  for (const block of rawBlocks) {
+    const lines = block.split("\n");
+    if (lines.length < 5) continue;
+
+    const hash = lines[0]?.trim() || "";
+    const author = lines[1]?.trim() || "";
+    const email = lines[2]?.trim() || "";
+    const timestamp = lines[3]?.trim() || "";
+    const subject = lines[4]?.trim() || "";
+    const body = lines.slice(5).join("\n").trim();
+
+    if (!hash) continue;
+
+    const filesChanged = await getChangedFilesForCommit(hash, repoPath);
+
+    commits.push({
+      hash,
+      author,
+      email,
+      timestamp,
+      subject,
+      body,
+      branch: range,
+      filesChanged,
+    });
+  }
+
+  return commits;
+}
+
 export async function fetchRepoCommits(
   repoPath: string,
   branches: string[],
