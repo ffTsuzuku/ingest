@@ -366,8 +366,7 @@ export class InteractiveTUI {
         }
       }
 
-      const ansiLines = renderMarkdownToAnsi(reportMarkdown);
-      await showTerminalPager(ansiLines, `${repoName} - ${dateStr}`);
+      await showTerminalPager(reportMarkdown, `${repoName} - ${dateStr}`);
     }
   }
 
@@ -405,8 +404,9 @@ export class InteractiveTUI {
         return;
       }
 
-      const renderedLines = await renderReportFileToAnsi(chosenFile);
-      await showTerminalPager(renderedLines, chosenFile.split("/").pop() || "Report");
+      const { readFile } = await import("node:fs/promises");
+      const content = await readFile(chosenFile, "utf8");
+      await showTerminalPager(content, chosenFile.split("/").pop() || "Report");
     }
   }
 

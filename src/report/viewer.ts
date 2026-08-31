@@ -2,17 +2,16 @@ import { readFile } from "node:fs/promises";
 import { ANSI, stripAnsi, wrapAnsiLine, visibleLength } from "../tui/ansi.js";
 import { render2DUnicodeGraph } from "./graph.js";
 
-export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): string[] {
-  const rendered2D = render2DUnicodeGraph(codeLines, contentWidth);
-  if (rendered2D.length > 0) {
-    return rendered2D;
-  }
+export interface RenderMarkdownOptions {
+  diagramMode?: "2d" | "structured";
+}
 
+export function renderStructuredMermaidToAnsi(codeLines: string[], contentWidth: number): string[] {
   const barWidth = Math.max(20, Math.min(contentWidth - 4, 72));
   const output: string[] = [];
 
   output.push("");
-  output.push(`  ${ANSI.gray}╭── ${ANSI.bold}${ANSI.brightCyan}[📊 Architecture & Execution Flow]${ANSI.reset} ${ANSI.gray}${"─".repeat(Math.max(2, barWidth - 36))}${ANSI.reset}`);
+  output.push(`  ${ANSI.gray}╭── ${ANSI.bold}${ANSI.brightCyan}[📊 Architecture & Execution Flow (Structured)]${ANSI.reset} ${ANSI.gray}${"─".repeat(Math.max(2, barWidth - 49))}${ANSI.reset}`);
   output.push(`  ${ANSI.gray}│${ANSI.reset}`);
 
   const nodes = new Map<string, string>();
@@ -43,7 +42,6 @@ export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): 
       continue;
     }
 
-    // Check for arrow flow: -->, ==>, -.-> or -- label --> or |label|
     const arrowMatch = line.match(/^(.*?)\s*(?:-->|==>|-\.->|--\s*([^->]+?)\s*-->|==\s*([^=>]+?)\s*==>|-\.\s*([^->]+?)\s*\.->)\s*(?:\|([^|]+)\|)?\s*(.*?)$/);
     if (arrowMatch) {
       const leftPart = arrowMatch[1] ?? "";
@@ -77,7 +75,7 @@ export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): 
     }
   }
 
-  // If we parsed nodes, output component summary
+  // Component breakdown
   if (nodes.size > 0) {
     output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.bold}${ANSI.yellow}◆ Architecture Components:${ANSI.reset}`);
     const maxIdLen = Math.max(...Array.from(nodes.keys()).map((k) => k.length));
@@ -92,7 +90,7 @@ export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): 
     output.push(`  ${ANSI.gray}│${ANSI.reset}`);
   }
 
-  // If we parsed flows, output execution flows
+  // Execution flows
   if (flows.length > 0) {
     output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.bold}${ANSI.yellow}▸ Execution & Dependency Flows:${ANSI.reset}`);
     for (const flow of flows) {
@@ -109,7 +107,6 @@ export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): 
     output.push(`  ${ANSI.gray}│${ANSI.reset}`);
   }
 
-  // Fallback if unstructured
   if (nodes.size === 0 && flows.length === 0) {
     for (const raw of codeLines) {
       const cleaned = cleanText(raw);
@@ -120,12 +117,28 @@ export function renderMermaidToAnsi(codeLines: string[], contentWidth: number): 
     output.push(`  ${ANSI.gray}│${ANSI.reset}`);
   }
 
-  // Tip badge
-  output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.dim}${ANSI.italic}💡 Tip: Launch interactive pan/zoom diagrams with '${ANSI.yellow}ingest --ui${ANSI.reset}${ANSI.dim}${ANSI.italic}'${ANSI.reset}`);
+  output.push(`  ${ANSI.gray}│${ANSI.reset}  ${ANSI.dim}${ANSI.italic}💡 Tip: Toggle 2D/Structured diagrams with 'm' | Web UI: '${ANSI.yellow}ingest --ui${ANSI.reset}${ANSI.dim}${ANSI.italic}'${ANSI.reset}`);
   output.push(`  ${ANSI.gray}╰${"─".repeat(barWidth)}${ANSI.reset}`);
   output.push("");
 
   return output;
+}
+
+export function renderMermaidToAnsi(
+  codeLines: string[],
+  contentWidth: number,
+  mode: "2d" | "structured" = "2d",
+): string[] {
+  if (mode === "structured") {
+    return renderStructuredMermaidToAnsi(codeLines, contentWidth);
+  }
+
+  const rendered2D = render2DUnicodeGraph(codeLines, contentWidth);
+  if (rendered2D.length > 0) {
+    return rendered2D;
+  }
+
+  return renderStructuredMermaidToAnsi(codeLines, contentWidth);
 }
 
 export function renderTableToAnsi(headers: string[], rows: string[][], contentWidth: number): string[] {
@@ -228,7 +241,11 @@ export function renderTableToAnsi(headers: string[], rows: string[][], contentWi
   return output;
 }
 
-export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): string[] {
+export function renderMarkdownToAnsi(
+  markdown: string,
+  maxWidth?: number,
+  options?: RenderMarkdownOptions,
+): string[] {
   const terminalWidth = maxWidth ?? (process.stdout.columns ? Math.max(40, process.stdout.columns) : 80);
   const contentWidth = Math.max(30, terminalWidth - 2);
   const lines = markdown.split("\n");
@@ -251,7 +268,7 @@ export function renderMarkdownToAnsi(markdown: string, maxWidth?: number): strin
           (codeBlockLang === "text" && codeBuffer.some((l) => /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram)\b/i.test(l.trim())));
 
         if (isMermaid) {
-          output.push(...renderMermaidToAnsi(codeBuffer, contentWidth));
+          output.push(...renderMermaidToAnsi(codeBuffer, contentWidth, options?.diagramMode));
         } else {
           const langBadge = codeBlockLang ? ` ${ANSI.bold}${ANSI.cyan}[${codeBlockLang}]${ANSI.gray} ` : " ";
           const langLen = codeBlockLang ? codeBlockLang.length + 4 : 1;
@@ -501,8 +518,12 @@ export function formatInlineMarkdown(text: string): string {
     .replace(/(?<=[\s(,]|^)\-(\d+)/g, `${ANSI.red}-$1${ANSI.reset}`);
 }
 
-export async function renderReportFileToAnsi(filePath: string, maxWidth?: number): Promise<string[]> {
+export async function renderReportFileToAnsi(
+  filePath: string,
+  maxWidth?: number,
+  options?: RenderMarkdownOptions,
+): Promise<string[]> {
   const content = await readFile(filePath, "utf8");
-  return renderMarkdownToAnsi(content, maxWidth);
+  return renderMarkdownToAnsi(content, maxWidth, options);
 }
 

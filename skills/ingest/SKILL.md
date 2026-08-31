@@ -48,10 +48,11 @@ description: >-
    - Automatically pre-selects current repo if run inside a Git repository while providing a sidebar switcher to browse reports for all other tracked repositories.
 
 4. **Terminal Markdown Viewer & Pager**:
-   - View generated markdown reports directly in the terminal with ANSI styling:
+   - View generated markdown reports directly in the terminal with ANSI styling, responsive table wrapping, and 2D Unicode Mermaid diagrams:
      ```bash
      ingest --view /path/to/report.md
      ```
+   - In the pager, press `m` to toggle Mermaid rendering between **2D Connected Box Flowcharts** and **Structured Component & Flow Lists**.
 
 5. **Report Expiration & Maintenance**:
    - Prune expired reports based on configured retention period (default: 30 days):

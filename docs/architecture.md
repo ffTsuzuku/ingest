@@ -55,7 +55,8 @@ graph TD
 ### 2.4. `src/report/`
 - **`generator.ts`**: Formats structured analysis output into clean GitHub-Flavored Markdown.
 - **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD-summary.md`), creates missing directories, scans past reports, lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
-- **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting and a keyboard-navigable scroll pager.
+- **`graph.ts`**: Zero-dependency 2D Unicode & ANSI graph layout engine. Implements topological ranking, character matrix plotting, box-drawing, corner routing, and branch arrow rendering for Mermaid flowcharts directly in terminal character grids.
+- **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting, responsive table cell wrapping, and dual-mode diagram formatting (2D box flow vs structured component map).
 
 ### 2.5. `src/server/`
 - **`server.ts`**: Zero-dependency HTTP server (`node:http`) powering the `--ui` Web Dashboard. Exposes REST endpoints (`/api/status`, `/api/repos`, `/api/reports`, `/api/report`) to browse reports across all repositories in the centralized `output_root`.

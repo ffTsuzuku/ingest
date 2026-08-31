@@ -8,7 +8,8 @@
 
 - 🖥️ **Interactive Zero-Dependency TUI/CLI**: Interactive terminal menus, arrow navigation, fuzzy repo selection, custom date pickers, and live AI connection testing built with pure Node.js native standard libraries.
 - 🌐 **Web Browser Dashboard & Report Explorer (`--ui`)**: Lightweight, zero-dependency HTTP server (`node:http`) serving a responsive single-page application to browse, filter, search, copy, and read reports across all repositories in your shared report store.
-- 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`).
+- 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, responsive table auto-wrapping, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`).
+- 📊 **Zero-Dependency 2D Mermaid Diagram Engine**: Automatically renders Mermaid architecture and flowcharts as connected 2D Unicode box graphs (`┌──┐ ──► ┌──┐`) with instant keyboard toggle (`m`) between 2D flowcharts and structured component lists.
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
 - ⏰ **Automated Schedulers (macOS LaunchAgent + Linux Cron)**: Install, manage, test, and inspect recurring daily report jobs seamlessly.
 - 🤖 **Global AI Skill Deployment**: Installs standard AI skill files (`skills/ingest/SKILL.md`) to `~/.gemini/config/skills/ingest/` so AI assistants can directly assist users.

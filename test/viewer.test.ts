@@ -162,6 +162,25 @@ graph TD
     assert.ok(plainText.includes("◇"));
     assert.ok(plainText.includes("▼"));
   });
+
+  it("should support explicit structured diagram mode when requested", () => {
+    const md = `\`\`\`mermaid
+flowchart TD
+  CLI["CLI Parser<br/><code>src/index.ts</code>"]
+  TUI["Terminal UI<br/><code>src/tui/</code>"]
+  CLI -->|Interactive Mode| TUI
+\`\`\``;
+
+    const lines = renderMarkdownToAnsi(md, 80, { diagramMode: "structured" });
+    const plainText = lines.map(stripAnsi).join("\n");
+
+    assert.ok(plainText.includes("Architecture & Execution Flow (Structured)"));
+    assert.ok(plainText.includes("Architecture Components:"));
+    assert.ok(plainText.includes("CLI"));
+    assert.ok(plainText.includes("CLI Parser (src/index.ts)"));
+    assert.ok(plainText.includes("Execution & Dependency Flows:"));
+    assert.ok(plainText.includes("CLI ──[Interactive Mode]──► TUI"));
+  });
 });
 
 

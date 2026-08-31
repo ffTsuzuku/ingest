@@ -439,8 +439,9 @@ export async function main(): Promise<void> {
   }
 
   if (parsed.viewFile) {
-    const lines = await renderReportFileToAnsi(parsed.viewFile);
-    await showTerminalPager(lines, parsed.viewFile.split("/").pop() || "Report");
+    const { readFile } = await import("node:fs/promises");
+    const content = await readFile(parsed.viewFile, "utf8");
+    await showTerminalPager(content, parsed.viewFile.split("/").pop() || "Report");
     return;
   }
 

@@ -1,18 +1,29 @@
 import { ANSI, visibleLength, wrapAnsiLine } from "./ansi.js";
+import { renderMarkdownToAnsi } from "../report/viewer.js";
 
-export async function showTerminalPager(rawLines: string[], title = "Report Viewer"): Promise<void> {
+export async function showTerminalPager(
+  content: string[] | string,
+  title = "Report Viewer",
+): Promise<void> {
+  const isMarkdown = typeof content === "string";
+
   if (!process.stdin.isTTY) {
     // Non-interactive fallback: just print the lines
-    console.log(rawLines.join("\n"));
+    const plainLines = isMarkdown ? renderMarkdownToAnsi(content) : content;
+    console.log(plainLines.join("\n"));
     return;
   }
 
   return new Promise((resolvePromise) => {
     let topRow = 0;
+    let diagramMode: "2d" | "structured" = "2d";
 
     const getDisplayRows = (width: number): string[] => {
+      const sourceLines = isMarkdown
+        ? renderMarkdownToAnsi(content, width, { diagramMode })
+        : content;
       const rows: string[] = [];
-      for (const line of rawLines) {
+      for (const line of sourceLines) {
         if (visibleLength(line) > width) {
           rows.push(...wrapAnsiLine(line, width));
         } else {
@@ -40,7 +51,10 @@ export async function showTerminalPager(rawLines: string[], title = "Report View
       // Header bar
       const startLineNum = totalLines > 0 ? topRow + 1 : 0;
       const endLineNum = Math.min(topRow + pageHeight, totalLines);
-      const headerContent = ` ${title} [Lines ${startLineNum}-${endLineNum} of ${totalLines}] `;
+      const modeIndicator = isMarkdown
+        ? ` [Mode: ${diagramMode === "2d" ? "2D Boxes" : "Structured"}]`
+        : "";
+      const headerContent = ` ${title}${modeIndicator} [Lines ${startLineNum}-${endLineNum} of ${totalLines}] `;
       const headerPad = Math.max(0, width - visibleLength(headerContent));
       output.push(`${ANSI.bgBlue}${ANSI.brightWhite}${headerContent}${" ".repeat(headerPad)}${ANSI.reset}`);
 
@@ -56,7 +70,8 @@ export async function showTerminalPager(rawLines: string[], title = "Report View
 
       // Footer status bar
       const percent = totalLines > 0 ? Math.round((endLineNum / totalLines) * 100) : 100;
-      const footerContent = ` (↑/↓ or j/k: Scroll | Space/b: Page | g/G: Top/End | q/Esc: Back)  [${percent}%]`;
+      const modeKeyPrompt = isMarkdown ? " | m: Toggle Diagram Mode" : "";
+      const footerContent = ` (↑/↓: Scroll | Space/b: Page${modeKeyPrompt} | q/Esc: Back)  [${percent}%]`;
       const footerPad = Math.max(0, width - visibleLength(footerContent));
       output.push(`${ANSI.bgGray}${ANSI.white}${footerContent}${" ".repeat(footerPad)}${ANSI.reset}`);
 
@@ -87,6 +102,13 @@ export async function showTerminalPager(rawLines: string[], title = "Report View
 
       if (key === "q" || key === "Q" || key === "\u0003" || key === "\u001b") {
         cleanup();
+        return;
+      }
+
+      // Toggle diagram mode with 'm' or 'M'
+      if ((key === "m" || key === "M") && isMarkdown) {
+        diagramMode = diagramMode === "2d" ? "structured" : "2d";
+        render();
         return;
       }
 
