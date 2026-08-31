@@ -1,6 +1,6 @@
 import { executeCommand } from "../utils/command.js";
-import { buildAnalysisPrompt } from "./prompt.js";
-import type { AIProvider, AnalysisContext, AnalysisResult, TokenUsage } from "./types.js";
+import { buildAnalysisPrompt, buildMultiRepoRollupPrompt } from "./prompt.js";
+import type { AIProvider, AnalysisContext, AnalysisResult, MultiRepoRollupContext, TokenUsage } from "./types.js";
 import type { AntigravityProviderConfig } from "../config/types.js";
 
 interface AgyJsonResponse {
@@ -31,6 +31,21 @@ export class AntigravityProvider implements AIProvider {
     } catch {
       return false;
     }
+  }
+
+    public async analyzeMultiRepo(context: MultiRepoRollupContext): Promise<AnalysisResult> {
+    const prompt = buildMultiRepoRollupPrompt(context);
+    const modelLabel = this.config.model ? `:${this.config.model}` : "";
+    const providerLabel = `agy${modelLabel}`;
+
+    const { content, tokenUsage } = await this.executeAgy(prompt, process.cwd(), providerLabel);
+
+    return {
+      content,
+      providerLabel,
+      rawResult: content,
+      tokenUsage,
+    };
   }
 
   public async analyze(context: AnalysisContext): Promise<AnalysisResult> {

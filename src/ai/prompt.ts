@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { AnalysisContext } from "./types.js";
+import type { AnalysisContext, MultiRepoRollupContext } from "./types.js";
 import { resolveConfiguredPath } from "../config/manager.js";
 
 export const DEFAULT_PROMPT =
@@ -281,3 +281,105 @@ export function buildAnalysisPrompt(context: AnalysisContext): string {
   return buildStandardAnalysisPrompt(context);
 }
 
+
+export function buildMultiRepoRollupPrompt(context: MultiRepoRollupContext): string {
+  const totalCommits = context.repos.reduce((acc, r) => acc + r.commits.length, 0);
+  const totalInsertions = context.repos.reduce((acc, r) => acc + (r.diffStat?.insertions || 0), 0);
+  const totalDeletions = context.repos.reduce((acc, r) => acc + (r.diffStat?.deletions || 0), 0);
+  const totalFilesChanged = context.repos.reduce((acc, r) => acc + (r.diffStat?.filesChangedCount || 0), 0);
+  const workspaceTitle = context.workspaceName || "Multi-Repo Workspace";
+
+  const reposSection = context.repos
+    .map((repo, repoIdx) => {
+      const repoCommits = repo.commits
+        .map((c, idx) => {
+          const filesStr = c.filesChanged.length > 0 ? `\n    Files: ${c.filesChanged.slice(0, 10).join(", ")}` : "";
+          const bodyStr = c.body ? `\n    Body: ${c.body.slice(0, 300)}` : "";
+          return `  Commit ${idx + 1} [${c.hash.slice(0, 8)}] (${c.branch}) - ${c.author}:
+    Subject: ${c.subject}${bodyStr}${filesStr}`;
+        })
+        .join("\n\n");
+
+      let diffInfo = "  Diff stats: None";
+      if (repo.diffStat) {
+        const topFiles = repo.diffStat.fileStats
+          .slice(0, 10)
+          .map((f) => `    - ${f.path}: +${f.insertions}, -${f.deletions}`)
+          .join("\n");
+        const patchExcerpt = repo.diffStat.diffPatches
+          ? `\n    Key Code Patches:\n\`\`\`diff\n${repo.diffStat.diffPatches.slice(0, 3000)}\n\`\`\``
+          : "";
+        diffInfo = `  Diff stats: ${repo.diffStat.filesChangedCount} files changed, +${repo.diffStat.insertions} / -${repo.diffStat.deletions}
+  Top modified files:
+${topFiles}${patchExcerpt}`;
+      }
+
+      return `### Repository ${repoIdx + 1}: ${repo.repoName}
+- Path: ${repo.repoPath}
+- Branches analyzed: ${repo.branches.join(", ")}
+- Total commits: ${repo.commits.length}
+
+Git Commits:
+${repoCommits || "  (No commits in this time window)"}
+
+${diffInfo}`;
+    })
+    .join("\n\n---\n\n");
+
+  const promptDirective = context.customPrompt || context.basePrompt;
+
+  return `You are a Principal Systems Architect and VP of Engineering generating a cross-repository workspace rollup executive digest.
+
+Context:
+- Workspace / Stack: ${workspaceTitle}
+- Date / Time Window: ${context.dateStr}
+- Total Repositories Analyzed: ${context.repos.length}
+- Total Commits across all Repositories: ${totalCommits}
+- Total Aggregate Diff: +${totalInsertions} / -${totalDeletions} across ${totalFilesChanged} files
+
+User Instructions:
+${promptDirective}
+
+Multi-Repository Activity & Commit History:
+${reposSection}
+
+Core Guiding Principles for this Multi-Repo Workspace Rollup:
+1. **Cross-Repo Synthesis & Architectural Cohesion**: Identify inter-repo changes, shared library/contract updates, API modifications, protocol evolutions, and frontend/backend integration points across repositories.
+2. **Executive Engineering Summary**: Provide a strategic high-level digest of overall engineering accomplishments, major technical themes, and system-wide velocity.
+3. **Repository-by-Repository Highlights**: Dedicated breakdown for each active repository detailing implementation mechanics and technical value.
+4. **Stack-Wide Risk, Migration & Deployment Assessment**: Highlight coordinated rollout sequences, configuration changes, database migrations, security considerations, or breaking changes.
+5. **Cross-Repository Activity Matrix**: Structured Markdown table mapping repositories, branches, commit count, net diff lines (+/-), and primary impacted subsystems.
+6. **Workspace Contributors**: Unified cross-repo contributor roster.
+
+Please produce a comprehensive workspace engineering rollup report following this structure:
+
+# Workspace Engineering Rollup — ${context.dateStr}
+
+## Executive Summary
+<A concise, high-signal cross-repo executive overview of overall engineering trajectory, major themes, and strategic accomplishments across the stack.>
+
+## Cross-Repository & Architectural Interactions
+<Deep analysis of cross-service contracts, shared libraries, API changes, frontend/backend integration, protocol changes, and shared architectural impacts across repositories.>
+
+## Repository Highlights & Implementation Mechanics
+### <Repo Name>
+- **What Changed**: Technical summary of changes across branches.
+- **Implementation Details**: Key algorithms, modules, APIs, or architectural changes.
+- **Impact & Interdependencies**: Downstream impact or connection to other repositories.
+
+<Repeat for each active repository>
+
+## Stack-Wide Risk, Breaking Changes & Deployment Considerations
+- **Breaking Changes / Contract Updates**: (None or list)
+- **Configuration & Infrastructure Updates**: (None or list)
+- **Deployment Coordination / Rollout Order**: (Notes on deployment dependencies across services)
+
+## Cross-Repository Activity Matrix
+| Repository | Branches | Commits | Net Lines (+/-) | Primary Subsystems / Focus |
+| :--- | :--- | :--- | :--- | :--- |
+| <Repo Name> | <Branches> | <Count> | <+ins / -del> | <Focus Area> |
+
+## Workspace Contributors
+<Contributor summary across all repositories with commit counts and net lines>
+`;
+}

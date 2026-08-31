@@ -10,6 +10,7 @@
 - 🌐 **Web Browser Dashboard & Report Explorer (`--ui`)**: Lightweight, zero-dependency HTTP server (`node:http`) serving a responsive single-page application to browse, filter, search, copy, and read reports across all repositories in your shared report store.
 - 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, responsive table auto-wrapping, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`).
 - 🔀 **Git Revision & Branch Comparison (`--compare <base>..<target>`)**: Compare arbitrary Git branches, tags, or revisions (e.g. `main..feature`, `origin/main...HEAD`, `v1.0.0..v2.0.0`) without requiring temporal date filtering. Analyzes commit history, diff statistics, and patch excerpts between the two references to generate structured comparison reports.
+- 🏢 **Multi-Repo Workspace Rollup (`--rollup`)**: Collects and synthesizes engineering activity across all configured repositories in your workspace into a unified cross-repo executive digest (`<output_root>/_workspace/YYYY-MM-DD-rollup-summary.md`), highlighting inter-service architectural impacts, API contract updates, stack-wide risks, and activity matrices.
 - 🌿 **Branch-Isolated Reports**: When a repository monitors multiple branches (e.g. `branches: ["main", "dev"]`), `ingest` analyzes and generates dedicated individual reports for each branch (e.g. `YYYY-MM-DD-main-summary.md` and `YYYY-MM-DD-dev-summary.md`) rather than merging them into a single report.
 - ⚡ **Token Usage Tracking**: Accurately tracks exact model prompt and completion tokens directly via provider session metrics (such as `agy --output-format json`), embedding token counts directly into report footers, Web UI badges, and CLI logs (with `N/A` fallback for unrecorded reports).
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
@@ -67,6 +68,11 @@ ingest --init --quick
 
 # Run headless report generation for all configured repos
 ingest ~/.config/ingest/config.jsonc
+
+# Generate cross-repository executive workspace rollup digest
+ingest --rollup
+ingest --rollup --date 2026-04-05
+ingest --rollup --date 2026-04-01..2026-04-07
 
 # Run report for a specific repository on a specific date
 ingest --repo /path/to/repo --date 2026-04-05

@@ -1,4 +1,4 @@
-import type { AnalysisContext, AnalysisResult } from "../ai/types.js";
+import type { AnalysisContext, AnalysisResult, MultiRepoRollupContext } from "../ai/types.js";
 import type { ReportMeta } from "./types.js";
 
 export function formatReportMarkdown(
@@ -78,6 +78,91 @@ None
 
 ---
 *Generated on ${generatedAt} (0 commits analyzed across ${branchDesc})*
+`;
+
+  return { markdown, meta };
+}
+
+export function formatWorkspaceRollupMarkdown(
+  context: MultiRepoRollupContext,
+  result: AnalysisResult,
+): { markdown: string; meta: ReportMeta } {
+  const generatedAt = new Date().toISOString();
+  const totalCommits = context.repos.reduce((acc, r) => acc + r.commits.length, 0);
+  const allBranches = Array.from(new Set(context.repos.flatMap((r) => r.branches)));
+  const workspaceName = context.workspaceName || "_workspace";
+
+  const meta: ReportMeta = {
+    repoName: "_workspace",
+    repoPath: process.cwd(),
+    branches: allBranches,
+    branch: "rollup",
+    dateStr: context.dateStr,
+    generatedAt,
+    providerLabel: result.providerLabel,
+    commitCount: totalCommits,
+    reportStyle: context.reportStyle,
+    tokenUsage: result.tokenUsage,
+  };
+
+  let content = result.content.trim();
+
+  // If content does not begin with header, add workspace title header
+  if (!content.startsWith("# ")) {
+    content = `# Workspace Engineering Rollup — ${context.dateStr}\n\n${content}`;
+  }
+
+  let tokenStr = "";
+  if (result.tokenUsage && typeof result.tokenUsage.totalTokens === "number" && result.tokenUsage.totalTokens > 0) {
+    tokenStr = ` • ${result.tokenUsage.totalTokens.toLocaleString()} tokens`;
+  }
+
+  const footer = `\n\n---\n*Generated on ${generatedAt} via \`${result.providerLabel}\` (${totalCommits} commits analyzed across ${context.repos.length} repositories)${tokenStr}*\n`;
+
+  return {
+    markdown: content + footer,
+    meta,
+  };
+}
+
+export function generateEmptyWorkspaceRollup(context: MultiRepoRollupContext): { markdown: string; meta: ReportMeta } {
+  const generatedAt = new Date().toISOString();
+  const allBranches = Array.from(new Set(context.repos.flatMap((r) => r.branches)));
+
+  const meta: ReportMeta = {
+    repoName: "_workspace",
+    repoPath: process.cwd(),
+    branches: allBranches,
+    branch: "rollup",
+    dateStr: context.dateStr,
+    generatedAt,
+    providerLabel: "ingest:none",
+    commitCount: 0,
+    reportStyle: context.reportStyle,
+  };
+
+  const markdown = `# Workspace Engineering Rollup — ${context.dateStr}
+
+## Executive Summary
+No commit activity recorded across configured repositories in the specified time window.
+
+## Cross-Repository & Architectural Interactions
+No inter-repo or architectural changes detected.
+
+## Repository Highlights & Implementation Mechanics
+None.
+
+## Stack-Wide Risk, Breaking Changes & Deployment Considerations
+No cross-system risks or breaking changes.
+
+## Cross-Repository Activity Matrix
+No active commits across repositories.
+
+## Workspace Contributors
+None
+
+---
+*Generated on ${generatedAt} (0 commits analyzed across ${context.repos.length} repositories)*
 `;
 
   return { markdown, meta };
