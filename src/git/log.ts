@@ -1,4 +1,5 @@
 import { runGit, resolveBranchTargetRefs, resolveSingleRef } from "./runner.js";
+import { Logger } from "../utils/logger.js";
 import type { CommitRecord, DateFilter } from "./types.js";
 
 const COMMIT_DELIMITER = "__GIT_INGEST_COMMIT_DELIMITER__";
@@ -11,7 +12,8 @@ export async function getChangedFilesForCommit(hash: string, repoPath: string): 
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
-  } catch {
+  } catch (err: unknown) {
+    Logger.error("getChangedFilesForCommit failed", err);
     return [];
   }
 }

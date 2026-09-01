@@ -121,9 +121,21 @@ export const shouldIgnoreDiff = isNoisyFile;
  * Returns a priority score (0-100) for a given file path based on its architectural and signal importance.
  * Higher scores are prioritized when truncating diffs to fit within token/line budgets.
  */
-export function getFilePriority(filePath: string): number {
+export function getFilePriority(
+  filePath: string,
+  customPriorities?: { high?: string[]; low?: string[] },
+): number {
   const normalized = filePath.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
   const baseName = normalized.split("/").pop() || "";
+
+  if (customPriorities) {
+    if (customPriorities.high?.some(pattern => globToRegex(pattern).test(normalized))) {
+      return 95;
+    }
+    if (customPriorities.low?.some(pattern => globToRegex(pattern).test(normalized))) {
+      return 15;
+    }
+  }
 
   // 1. Critical Architecture, Manifests & Root Configuration (Score: 100)
   if (
@@ -220,6 +232,7 @@ export interface DiffOptions {
   maxLines?: number;
   smartDiffFilter?: boolean;
   diffIgnorePatterns?: string[];
+  filePriorities?: { high?: string[]; low?: string[] };
 }
 
 interface ParsedFileDiff {
@@ -257,12 +270,15 @@ export async function fetchDiffPatches(
   const targetRefs = await resolveBranchTargetRefs(repoPath, targetBranch);
 
   // Run git log with unified patch diffs (-p) and 2 lines of context (-U2)
-  const res = await runGit(["log", ...targetRefs, ...dateArgs, "-p", "-U2", "--no-color"], repoPath);
+  const res = await runGit(["log", ...targetRefs, ...dateArgs, "-p", "-U2", "--no-color"], repoPath, { maxBuffer: 50 * 1024 * 1024 });
   if (res.exitCode !== 0 || !res.stdout) {
     return "";
   }
 
-  const rawLines = res.stdout.split("\n");
+  let rawLines = res.stdout.split("\n");
+  if (rawLines.length > maxPatchLines * 10) {
+    rawLines = rawLines.slice(0, maxPatchLines * 10);
+  }
   const fileDiffs: ParsedFileDiff[] = [];
   let currentFile: ParsedFileDiff | null = null;
   let orderCounter = 0;
@@ -286,7 +302,7 @@ export async function fetchDiffPatches(
       }
 
       const noisy = isNoisyFile(filePath, ignorePatterns, smartFilter);
-      const priority = getFilePriority(filePath);
+      const priority = getFilePriority(filePath, options.filePriorities);
 
       currentFile = {
         filePath,
@@ -385,12 +401,15 @@ export async function fetchDiffStat(
   const targetRefs = await resolveBranchTargetRefs(repoPath, targetBranch);
 
   // Run git log with diffstat
-  const res = await runGit(["log", ...targetRefs, ...dateArgs, "--stat"], repoPath);
+  const res = await runGit(["log", ...targetRefs, ...dateArgs, "--stat"], repoPath, { maxBuffer: 50 * 1024 * 1024 });
   if (res.exitCode !== 0 || !res.stdout) {
     return undefined;
   }
 
-  const lines = res.stdout.split("\n");
+  let lines = res.stdout.split("\n");
+  if (lines.length > maxLines * 10) {
+    lines = lines.slice(0, maxLines * 10);
+  }
   const fileStats: Array<{ path: string; insertions: number; deletions: number }> = [];
   let totalFiles = 0;
   let totalInsertions = 0;
@@ -427,7 +446,7 @@ export async function fetchDiffStat(
   }
 
   // Sort file stats by priority so the top 30 entries represent the highest architectural value
-  fileStats.sort((a, b) => getFilePriority(b.path) - getFilePriority(a.path));
+  fileStats.sort((a, b) => getFilePriority(b.path, options.filePriorities) - getFilePriority(a.path, options.filePriorities));
 
   const truncatedSummary = lines
     .filter((l) => {
@@ -448,6 +467,7 @@ export async function fetchDiffStat(
       maxPatchLines: maxLines * 2,
       smartDiffFilter: smartFilter,
       diffIgnorePatterns: ignorePatterns,
+      filePriorities: options.filePriorities,
     },
   );
 
@@ -495,25 +515,36 @@ export async function fetchDiffPatchesBetweenRefs(
   const smartFilter = options.smartDiffFilter ?? true;
   const ignorePatterns = options.diffIgnorePatterns ?? [];
 
-  const res = await runGit(["diff", range, "-p", "-U2", "--no-color"], repoPath);
+  const res = await runGit(["diff", range, "-p", "-U2", "--no-color"], repoPath, { maxBuffer: 50 * 1024 * 1024 });
   if (res.exitCode !== 0 || !res.stdout) {
     return "";
   }
 
-  const rawLines = res.stdout.split("\n");
+  let rawLines = res.stdout.split("\n");
+  if (rawLines.length > maxPatchLines * 10) {
+    rawLines = rawLines.slice(0, maxPatchLines * 10);
+  }
   const fileDiffs: ParsedFileDiff[] = [];
   let currentFile: ParsedFileDiff | null = null;
   let fileIndex = 0;
 
   for (const line of rawLines) {
-    const diffHeaderMatch = line.match(/^diff --git a\/(.+) b\/(.+)/);
+    const diffHeaderMatch = line.match(/^diff --git (?:a\/(.+?)|"a\/(.+?)") (?:b\/(.+?)|"b\/(.+?)")$/);
     if (diffHeaderMatch) {
       if (currentFile) {
         fileDiffs.push(currentFile);
       }
-      const filePath = diffHeaderMatch[2] || diffHeaderMatch[1] || "";
+      let filePath =
+        diffHeaderMatch[3] ||
+        diffHeaderMatch[4] ||
+        diffHeaderMatch[1] ||
+        diffHeaderMatch[2] ||
+        "";
+      if (filePath === "/dev/null" || filePath === "dev/null") {
+        filePath = diffHeaderMatch[1] || diffHeaderMatch[2] || filePath;
+      }
       const isNoisy = isNoisyFile(filePath, ignorePatterns, smartFilter);
-      const priority = getFilePriority(filePath);
+      const priority = getFilePriority(filePath, options.filePriorities);
       currentFile = {
         filePath,
         lines: [line],
@@ -609,7 +640,7 @@ export async function fetchDiffStatBetweenRefs(
   const smartFilter = options.smartDiffFilter ?? true;
   const ignorePatterns = options.diffIgnorePatterns ?? [];
 
-  const res = await runGit(["diff", range, "--stat"], repoPath);
+  const res = await runGit(["diff", range, "--stat"], repoPath, { maxBuffer: 50 * 1024 * 1024 });
   if (res.exitCode !== 0) {
     return undefined;
   }
@@ -625,7 +656,10 @@ export async function fetchDiffStatBetweenRefs(
     };
   }
 
-  const lines = res.stdout.split("\n");
+  let lines = res.stdout.split("\n");
+  if (lines.length > maxLines * 10) {
+    lines = lines.slice(0, maxLines * 10);
+  }
   const fileStats: Array<{ path: string; insertions: number; deletions: number }> = [];
   let totalFiles = 0;
   let totalInsertions = 0;
@@ -660,7 +694,7 @@ export async function fetchDiffStatBetweenRefs(
     }
   }
 
-  fileStats.sort((a, b) => getFilePriority(b.path) - getFilePriority(a.path));
+  fileStats.sort((a, b) => getFilePriority(b.path, options.filePriorities) - getFilePriority(a.path, options.filePriorities));
 
   const truncatedSummary = lines
     .filter((l) => {
@@ -677,6 +711,7 @@ export async function fetchDiffStatBetweenRefs(
     maxPatchLines: maxLines * 2,
     smartDiffFilter: smartFilter,
     diffIgnorePatterns: ignorePatterns,
+    filePriorities: options.filePriorities,
   });
 
   return {

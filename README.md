@@ -13,6 +13,8 @@
 - 🏢 **Multi-Repo Workspace Rollup (`--rollup`)**: Collects and synthesizes engineering activity across all configured repositories in your workspace into a unified cross-repo executive digest (`<output_root>/_workspace/YYYY-MM-DD-rollup-summary.md`), highlighting inter-service architectural impacts, API contract updates, stack-wide risks, and activity matrices.
 - 🌿 **Branch-Isolated Reports**: When a repository monitors multiple branches (e.g. `branches: ["main", "dev"]`), `ingest` analyzes and generates dedicated individual reports for each branch (e.g. `YYYY-MM-DD-main-summary.md` and `YYYY-MM-DD-dev-summary.md`) rather than merging them into a single report.
 - ⚡ **Token Usage Tracking**: Accurately tracks exact model prompt and completion tokens directly via provider session metrics (such as `agy --output-format json`), embedding token counts directly into report footers, Web UI badges, and CLI logs (with `N/A` fallback for unrecorded reports).
+- 📄 **Multi-Format Report Export (`--format json|html|slack`)**: Generates reports in Markdown, structured JSON (`.json`), standalone styled HTML documents (`.html`), or Slack-compatible mrkdwn (`.txt`) for easy sharing across teams and messaging channels.
+- ⚡ **Parallel Multi-Repo Processing**: Bounded concurrent processing (`pooledMap`) analyzes multiple repositories in parallel with clean log prefixing and memory-safe diff buffering.
 - 🔍 **Git Diff Deep-Dive Mode**: Analyzes commit logs alongside file impact statistics (`git diff --stat`), line changes (+/-), and patch excerpts.
 - ⏰ **Automated Schedulers (macOS LaunchAgent + Linux Cron)**: Install, manage, test, and inspect recurring daily report jobs seamlessly.
 - 🤖 **Dynamic AI Agent & Harness Discovery**: Automatically probes the environment for installed agent harnesses (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, or custom commands) with real-time `[Detected ✔]` status badges and automatic pre-selection in setup wizards.
@@ -93,6 +95,11 @@ ingest --repo /path/to/repo --diff
 # Select report style preset ("system-centric" | "default" | "changelog" | "security")
 ingest --repo /path/to/repo --style system-centric
 
+# Multi-format report export (markdown, json, html, or slack mrkdwn)
+ingest --repo /path/to/repo --format json
+ingest --repo /path/to/repo --format html
+ingest --repo /path/to/repo --format slack
+
 # Inspect and repair Mermaid diagram syntax with AI
 ingest --fix-diagrams ~/reports/my-repo/2026-04-05-summary.md
 
@@ -155,7 +162,11 @@ ingest --schedule-remove
       "diff_mode": true,
       "max_diff_lines": 200,
       "diff_ignore_patterns": ["*.gen.ts", "docs/auto/**"],
-      "smart_diff_filter": true
+      "smart_diff_filter": true,
+      "file_priorities": {
+        "high": ["*.tf", "*.proto", "Dockerfile*"],
+        "low": ["*.generated.ts", "locales/**"]
+      }
     }
   ],
   "output_root": "~/reports",

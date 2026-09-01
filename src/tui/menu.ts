@@ -331,6 +331,7 @@ export class InteractiveTUI {
           diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines, {
             smartDiffFilter: effectiveRepo.smart_diff_filter,
             diffIgnorePatterns: effectiveRepo.diff_ignore_patterns,
+            filePriorities: ctx.config.filePriorities,
           });
           if (diffStat) {
             console.log(`  Diff Stat: ${diffStat.filesChangedCount} files changed (+${diffStat.insertions}, -${diffStat.deletions}).`);

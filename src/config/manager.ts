@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import type { AppConfig, LocalRepoConfig, Nullable, RawConfig, RepoConfig } from "./types.js";
 import { parseJsonc } from "./parser.js";
+import { validateConfig } from "./validator.js";
 import { Logger } from "../utils/logger.js";
 
 import { existsSync } from "node:fs";
@@ -226,6 +227,12 @@ export class ConfigManager {
       }
     }
 
+    const validationErrors = validateConfig(rawConfig);
+    if (validationErrors.length > 0) {
+      const errorMessages = validationErrors.map(e => `  • ${e.field}: ${e.message}`).join('\n');
+      Logger.warn(`Configuration warnings in ${resolvedConfigPath}:\n${errorMessages}`);
+    }
+
     // Check for repo-local configuration in cwd if customPath was not explicitly specified
     let localCwdConfig: LocalRepoConfig | null = null;
     if (!customPath) {
@@ -277,6 +284,17 @@ export class ConfigManager {
           : DEFAULT_PROMPT;
     const reportStyle = localCwdConfig?.report_style || rawConfig.report_style || "default";
 
+    const rawFilePriorities = {
+      high: [...(localCwdConfig?.file_priorities?.high || []), ...(rawConfig.file_priorities?.high || [])],
+      low: [...(localCwdConfig?.file_priorities?.low || []), ...(rawConfig.file_priorities?.low || [])],
+    };
+    const filePriorities = (rawFilePriorities.high.length > 0 || rawFilePriorities.low.length > 0)
+      ? {
+          high: rawFilePriorities.high.length > 0 ? rawFilePriorities.high : undefined,
+          low: rawFilePriorities.low.length > 0 ? rawFilePriorities.low : undefined,
+        }
+      : undefined;
+
     Logger.configure({ logFilePath: errorLogPath });
 
     return {
@@ -291,6 +309,7 @@ export class ConfigManager {
       reportStyle,
       diffIgnorePatterns: localCwdConfig?.diff_ignore_patterns ?? rawConfig.diff_ignore_patterns,
       smartDiffFilter: localCwdConfig?.smart_diff_filter ?? rawConfig.smart_diff_filter ?? true,
+      filePriorities,
       configPath: resolvedConfigPath,
     };
   }

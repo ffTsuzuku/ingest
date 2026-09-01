@@ -33,16 +33,20 @@ graph TD
 
 ## 2. Module Responsibilities
 
-### 2.1. `src/config/`
-- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, `RawConfig`, and `ReportStyle` (including `diff_ignore_patterns`, `smart_diff_filter`, `diff_mode`, `max_diff_lines`, `report_style` presets, and `retention_days` expiration settings).
+### 2.1. `src/cli/`
+- **`parser.ts`**: CLI argument tokenizer, flag router, alias mapper, and styled terminal help text renderer (`parseCliArgs`, `printHelp`, `ParsedArgs`).
+
+### 2.2. `src/config/`
+- **`types.ts`**: Formal schemas for `AppConfig`, `RepoConfig`, `LocalRepoConfig`, `ProviderConfigMap`, `RawConfig`, `ReportStyle`, and `file_priorities` overrides (including `diff_ignore_patterns`, `smart_diff_filter`, `diff_mode`, `max_diff_lines`, `report_style` presets, and `retention_days` expiration settings).
 - **`parser.ts`**: Pure zero-dependency JSONC parser supporting single-line `//`, block `/* ... */` comments, and trailing commas.
-- **`manager.ts`**: Implements hierarchical configuration loading. Discovers global defaults (`~/.config/ingest/config.jsonc`) and local per-repository configurations (`.ingestrc`, `ingest.config.jsonc`, `.ingest.json`), merges overrides gracefully, and supports persistent updates.
+- **`validator.ts`**: Runtime structural validator (`validateConfig`) providing non-fatal diagnostic warnings for malformed configuration files without throwing unexpected errors.
+- **`manager.ts`**: Implements hierarchical configuration loading. Discovers global defaults (`~/.config/ingest/config.jsonc`) and local per-repository configurations (`.ingestrc`, `ingest.config.jsonc`, `.ingest.json`), merges overrides gracefully (including `file_priorities`), validates schema shape, and supports persistent updates.
 - **`init.ts`**: Interactive and quick configuration initialization wizard (`ConfigInitWizard`). Guides developers through AI provider selection, branch discovery, prompt presets (Engineering Deep Dive, System-Centric Architecture, Changelog, Security), diff limits, report storage & retention, automatic `.gitignore` prompt and appending for local configurations, and optional scheduler installation.
 
 ### 2.2. `src/git/`
-- **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, lists local/remote branches, infers canonical repository names (via Git remote origin URLs, worktree common directories, or folder paths), queries remote origin (`fetchRemoteOrigin`), verifies refs (`refExists`), and exports reference comparison utilities (`getCommitsBetweenRefs`, `parseCompareRange`, `resolveBranchTargetRefs`, `resolveSingleRef`).
-- **`log.ts`**: Queries Git commit history across specified branches within flexible time windows and custom date ranges (`--date <start>..<end>`, `--since`, `--until`), or between arbitrary Git references/branches/tags (`getCommitsBetweenRefs`, `parseCompareRange`), seamlessly querying `origin/<branch>` and local `<branch>` with deduplication and offline fallback, extracting author names, emails, hashes, commit subjects, and file change lists.
-- **`diff.ts`**: Analyzes repository file stats (`git diff --stat`) and patch excerpts for deep-dive AI context, including ref-to-ref comparisons (`fetchDiffStatBetweenRefs`, `fetchDiffPatchesBetweenRefs`, `fetchDiffBetweenRefs`), resolving target and remote origin refs. Implements smart diff filtering (`DEFAULT_NOISY_PATTERNS` for lockfiles, bundles, sourcemaps, compiler metadata, media/binary assets, snapshots), user-defined ignore globs (`diff_ignore_patterns`), filter toggle (`smart_diff_filter`), and architectural signal prioritization (`getFilePriority`) that prioritizes manifests, entrypoints, and core source over secondary artifacts when truncating to line budgets.
+- **`runner.ts`**: Safe `git` command execution using `child_process.spawn`. Handles path resolution, detects whether a directory is a valid git repository, lists local/remote branches, infers canonical repository names (via Git remote origin URLs, worktree common directories, or folder paths), queries remote origin (`fetchRemoteOrigin`), verifies refs (`refExists`), supports configurable `maxBuffer` limits (50MB for diffs), resilient error logging, and exports reference comparison utilities (`getCommitsBetweenRefs`, `parseCompareRange`, `resolveBranchTargetRefs`, `resolveSingleRef`).
+- **`log.ts`**: Queries Git commit history across specified branches within flexible time windows and custom date ranges (`--date <start>..<end>`, `--since`, `--until`), or between arbitrary Git references/branches/tags (`getCommitsBetweenRefs`, `parseCompareRange`), seamlessly querying `origin/<branch>` and local `<branch>` with deduplication, offline fallback, and resilient error logging.
+- **`diff.ts`**: Analyzes repository file stats (`git diff --stat`) and patch excerpts for deep-dive AI context, including ref-to-ref comparisons (`fetchDiffStatBetweenRefs`, `fetchDiffPatchesBetweenRefs`, `fetchDiffBetweenRefs`), resolving target and remote origin refs with stream-safe line bounds. Implements smart diff filtering (`DEFAULT_NOISY_PATTERNS` for lockfiles, bundles, sourcemaps, compiler metadata, media/binary assets, snapshots), user-defined ignore globs (`diff_ignore_patterns`), filter toggle (`smart_diff_filter`), hardened regex matching for quoted filenames, and user-configurable architectural signal prioritization (`file_priorities.high` / `file_priorities.low` in `getFilePriority`) that prioritizes manifests, entrypoints, and core source over secondary artifacts when truncating to line budgets.
 
 ### 2.3. `src/ai/`
 - **`types.ts`**: Common interfaces for `AIProvider`, `AnalysisContext`, `RepoRollupActivity`, `MultiRepoRollupContext`, `AnalysisResult`, and `TokenUsage`.
@@ -63,6 +67,7 @@ graph TD
 
 ### 2.4. `src/report/`
 - **`generator.ts`**: Formats structured single-repo and workspace multi-repo rollup markdown reports (`formatReportMarkdown`, `formatWorkspaceRollupMarkdown`, `generateEmptyReport`, `generateEmptyWorkspaceRollup`) with exact token counts and branch/repo context in the metadata footer.
+- **`formatter.ts`**: Multi-format report export engine (`formatReport`, `toJson`, `toHtml`, `toSlack`). Transforms markdown summaries into structured JSON objects with metadata, self-contained styled HTML documents, or Slack-compatible mrkdwn snippets.
 - **`storage.ts`**: Resolves report file paths (`<output_root>/<repo_name>/YYYY-MM-DD[-<branch>][-<style>]-summary.md` and `<output_root>/_workspace/YYYY-MM-DD-rollup[-<style>]-summary.md`), creates missing directories, saves workspace rollups (`saveWorkspaceRollup`), scans past reports (`listReports`), parses branch and style filename variants (`parseReportFileName`), groups reports by repository (`groupReportsByRepo`), filters/searches reports across date/branch/style/keywords (`filterReports`), lists repositories (`listRepositories`), and prunes expired reports based on configured retention window (`cleanExpiredReports`).
 - **`graph.ts`**: Zero-dependency 2D Unicode & ANSI graph layout engine. Implements topological ranking, character matrix plotting, box-drawing, corner routing, and branch arrow rendering for Mermaid flowcharts directly in terminal character grids.
 - **`viewer.ts`**: Zero-dependency terminal markdown renderer with ANSI syntax highlighting, responsive table cell wrapping, and dual-mode diagram formatting (2D box flow vs structured component map).
@@ -82,7 +87,13 @@ graph TD
 - **`installer.ts`**: Discovers and deploys the `ingest` AI skill into `~/.gemini/config/skills/ingest/` (or workspace `.agents/skills/`) so AI coding assistants can immediately assist users.
 
 ### 2.8. `src/tui/`
+- **`guard.ts`**: Process-level terminal safety guard (`installTerminalGuard`). Listens to `exit`, `uncaughtException`, and `unhandledRejection` to guarantee terminal state restoration, cursor restoration, and raw-mode teardown.
 - **`ansi.ts`**: ANSI color codes, text formatting, line drawing, and cursor manipulation.
-- **`prompt.ts`**: Zero-dependency interactive prompts: single select with instant real-time typing filter, scroll pagination, and navigation (arrows/Ctrl+P/Ctrl+N), multi-select with search and custom items, text input with Tab path autocompletion (`~`, relative `./`, `../`, absolute `/`, directory `/` appending), and confirmation modals with seamless `Esc` back/cancel support.
-- **`pager.ts`**: Scrollable terminal pager supporting `Up`/`Down`, `PageUp`/`PageDown`, `Home`/`End`, and `q`/`Esc` to exit or return.
+- **`prompt.ts`**: Zero-dependency interactive prompts: single select with instant real-time typing filter, scroll pagination, navigation, `SIGWINCH` resize handling, multi-select with search and custom items, text input with Tab path autocompletion (`~`, relative `./`, `../`, absolute `/`, directory `/` appending), and confirmation modals with seamless `Esc` back/cancel support.
+- **`pager.ts`**: Scrollable terminal pager supporting `Up`/`Down`, `PageUp`/`PageDown`, `Home`/`End`, resize adjustments, and `q`/`Esc` to exit or return.
 - **`menu.ts`**: Interactive TUI orchestration loop featuring repository-organized report exploration, report count mapping badges, instant-filter report browsing with date/branch/style/keyword matching directly on typing, and fluid `Esc` back navigation across all menus, submenus, and wizards.
+
+### 2.9. `src/utils/`
+- **`command.ts`**: Child process execution wrapper with execution timeouts, dynamic streaming buffers, and `maxBuffer` management.
+- **`concurrency.ts`**: Bounded asynchronous task runner (`pooledMap`) allowing controlled parallel execution across multiple repositories.
+- **`logger.ts`**: Multi-level logger (`info`, `warn`, `success`, `error`) writing structured timestamped traces to `error.log`.

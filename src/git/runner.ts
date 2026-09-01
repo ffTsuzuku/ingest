@@ -3,16 +3,17 @@ import { stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { expandHome } from "../config/manager.js";
 import { executeCommand, type CommandResult } from "../utils/command.js";
+import { Logger } from "../utils/logger.js";
 
 export { type CommandResult };
 
 export async function runGit(
   args: string[],
   cwd: string,
-  options?: { timeoutMs?: number; env?: NodeJS.ProcessEnv },
+  options?: { timeoutMs?: number; env?: NodeJS.ProcessEnv; maxBuffer?: number },
 ): Promise<CommandResult> {
   try {
-    return await executeCommand("git", args, { cwd, timeoutMs: options?.timeoutMs, env: options?.env });
+    return await executeCommand("git", args, { cwd, timeoutMs: options?.timeoutMs, env: options?.env, maxBuffer: options?.maxBuffer });
   } catch (err: unknown) {
     return {
       stdout: "",
@@ -29,7 +30,8 @@ export async function refExists(ref: string, repoPath: string): Promise<boolean>
   try {
     const res = await runGit(["rev-parse", "--verify", "--quiet", ref], repoPath);
     return res.exitCode === 0 && res.stdout.trim().length > 0;
-  } catch {
+  } catch (err: unknown) {
+    Logger.warn(`refExists failed: ${String(err)}`);
     return false;
   }
 }
@@ -53,7 +55,8 @@ export async function fetchRemoteOrigin(repoPath: string, timeoutMs: number = 80
 
     const fetchRes = await runGit(["fetch", targetRemote, "--prune", "--quiet"], repoPath, { timeoutMs });
     return fetchRes.exitCode === 0;
-  } catch {
+  } catch (err: unknown) {
+    Logger.warn(`fetchRemoteOrigin failed: ${String(err)}`);
     return false;
   }
 }
@@ -107,7 +110,8 @@ export async function isGitRepo(dirPath: string): Promise<boolean> {
   try {
     const res = await runGit(["rev-parse", "--is-inside-work-tree"], dirPath);
     return res.exitCode === 0 && res.stdout === "true";
-  } catch {
+  } catch (err: unknown) {
+    Logger.warn(`isGitRepo failed: ${String(err)}`);
     return false;
   }
 }
@@ -120,7 +124,8 @@ export async function getGitBranches(repoPath: string): Promise<string[]> {
       .split("\n")
       .map((b) => b.trim())
       .filter((b) => b.length > 0);
-  } catch {
+  } catch (err: unknown) {
+    Logger.error("getGitBranches failed", err);
     return [];
   }
 }
@@ -149,7 +154,8 @@ export async function getAllGitBranches(repoPath: string): Promise<string[]> {
       if (b === "main" || b === "master") return 1;
       return a.localeCompare(b);
     });
-  } catch {
+  } catch (err: unknown) {
+    Logger.error("getAllGitBranches failed", err);
     return await getGitBranches(repoPath);
   }
 }
@@ -160,8 +166,8 @@ export async function getCurrentBranch(repoPath: string): Promise<string> {
     if (res.exitCode === 0 && res.stdout.length > 0) {
       return res.stdout;
     }
-  } catch {
-    // Fallback
+  } catch (err: unknown) {
+    Logger.warn(`getCurrentBranch failed: ${String(err)}`);
   }
   return "main";
 }
@@ -219,8 +225,8 @@ export async function getRepoName(repoPath: string, configuredRepoName?: string 
       const extracted = extractRepoNameFromUrl(res.stdout);
       if (extracted) return extracted;
     }
-  } catch {
-    // Ignore and fall through
+  } catch (err: unknown) {
+    Logger.warn(`getRepoName (origin URL) failed: ${String(err)}`);
   }
 
   // 2. Try first available git remote
@@ -236,8 +242,8 @@ export async function getRepoName(repoPath: string, configuredRepoName?: string 
         }
       }
     }
-  } catch {
-    // Ignore and fall through
+  } catch (err: unknown) {
+    Logger.warn(`getRepoName (first remote) failed: ${String(err)}`);
   }
 
   // 3. Try git-common-dir (handles git worktrees and bare repo layouts)
@@ -251,8 +257,8 @@ export async function getRepoName(repoPath: string, configuredRepoName?: string 
         return parentBase;
       }
     }
-  } catch {
-    // Ignore and fall through
+  } catch (err: unknown) {
+    Logger.warn(`getRepoName (git common dir) failed: ${String(err)}`);
   }
 
   // 4. Fallback to folder name, checking parent if folder name is a common branch / worktree name

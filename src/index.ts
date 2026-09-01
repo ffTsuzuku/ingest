@@ -25,204 +25,13 @@ import { Logger } from "./utils/logger.js";
 import { ConfigInitWizard } from "./config/init.js";
 import { IngestWebServer } from "./server/server.js";
 import { ANSI } from "./tui/ansi.js";
+import { installTerminalGuard } from "./tui/guard.js";
+import { formatReport, type OutputFormat } from "./report/formatter.js";
+import { pooledMap } from "./utils/concurrency.js";
+import { type ParsedArgs, parseCliArgs, printHelp } from "./cli/parser.js";
 
-interface ParsedArgs {
-  rollup?: boolean;
-  configPath?: string;
-  outputRoot?: string;
-  retentionDays?: number;
-  cleanExpired?: boolean;
-  repoPath?: string;
-  compare?: string;
-  dateStr?: string;
-  sinceStr?: string;
-  untilStr?: string;
-  dateRange?: string;
-  sinceHours?: number;
-  diffMode?: boolean;
-  reportStyle?: string;
-  viewFile?: string;
-  fixDiagramFile?: string;
-  ui?: boolean;
-  port?: number;
-  noOpen?: boolean;
-  init?: boolean;
-  quickInit?: boolean;
-  localInit?: boolean;
-  globalInit?: boolean;
-  installSkill?: boolean;
-  scheduleInstall?: boolean;
-  scheduleStatus?: boolean;
-  scheduleRemove?: boolean;
-  scheduleTime?: string;
-  scheduleCron?: string;
-  scheduleDays?: string;
-  scheduleFrequency?: ScheduleFrequency;
-  intervalHours?: number;
-  expiresAt?: string;
-  expireDays?: number;
-  expireSchedule?: string;
-  interactive?: boolean;
-  help?: boolean;
-}
-
-function parseCliArgs(args: string[]): ParsedArgs {
-  const result: ParsedArgs = {};
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] ?? "";
-
-    if (arg === "-h" || arg === "--help") {
-      result.help = true;
-    } else if (arg === "--rollup" || arg === "rollup") {
-      result.rollup = true;
-    } else if (arg === "-i" || arg === "--interactive") {
-      result.interactive = true;
-    } else if (arg === "--init" || arg === "init") {
-      result.init = true;
-    } else if (arg === "--quick" || arg === "--quick-init" || arg === "-q") {
-      result.quickInit = true;
-    } else if (arg === "--local") {
-      result.localInit = true;
-    } else if (arg === "--global") {
-      result.globalInit = true;
-    } else if (
-      arg === "clean" ||
-      arg === "cleanup" ||
-      arg === "prune" ||
-      arg === "--clean" ||
-      arg === "--cleanup" ||
-      arg === "--clean-expired" ||
-      arg === "--clean-reports" ||
-      arg === "--prune"
-    ) {
-      result.cleanExpired = true;
-    } else if ((arg === "--retention-days" || arg === "--days" || arg === "-d") && i + 1 < args.length) {
-      result.retentionDays = parseInt(args[++i] ?? "30", 10);
-    } else if (arg === "--expire-schedule" && i + 1 < args.length) {
-      result.expireSchedule = args[++i];
-    } else if ((arg === "--expires" || arg === "--expire-at") && i + 1 < args.length) {
-      result.expiresAt = args[++i];
-    } else if (arg === "--expire-days" && i + 1 < args.length) {
-      result.expireDays = parseInt(args[++i] ?? "0", 10);
-    } else if (arg === "--config" && i + 1 < args.length) {
-      result.configPath = args[++i];
-    } else if (arg === "--output-root" && i + 1 < args.length) {
-      result.outputRoot = args[++i];
-    } else if ((arg === "--compare" || arg === "-c") && i + 1 < args.length) {
-      result.compare = args[++i];
-    } else if (arg === "--repo" && i + 1 < args.length) {
-      result.repoPath = args[++i];
-    } else if (arg === "--date" && i + 1 < args.length) {
-      result.dateStr = args[++i];
-    } else if (arg === "--since" && i + 1 < args.length) {
-      result.sinceStr = args[++i];
-    } else if (arg === "--until" && i + 1 < args.length) {
-      result.untilStr = args[++i];
-    } else if ((arg === "--range" || arg === "--date-range") && i + 1 < args.length) {
-      result.dateRange = args[++i];
-    } else if (arg === "--diff") {
-      result.diffMode = true;
-    } else if ((arg === "--style" || arg === "--report-style") && i + 1 < args.length) {
-      result.reportStyle = args[++i];
-    } else if (arg === "--ui" || arg === "ui" || arg === "--serve" || arg === "serve") {
-      result.ui = true;
-    } else if (arg === "--port" && i + 1 < args.length) {
-      result.port = parseInt(args[++i] ?? "3456", 10);
-    } else if (arg === "--no-open") {
-      result.noOpen = true;
-    } else if (arg === "--view" && i + 1 < args.length) {
-      result.viewFile = args[++i];
-    } else if ((arg === "--fix-diagram" || arg === "--fix-diagrams" || arg === "--repair" || arg === "repair") && i + 1 < args.length) {
-      result.fixDiagramFile = args[++i];
-    } else if (arg === "--install-skill") {
-      result.installSkill = true;
-    } else if (arg === "--schedule-install") {
-      result.scheduleInstall = true;
-    } else if (arg === "--schedule-status") {
-      result.scheduleStatus = true;
-    } else if (arg === "--schedule-remove") {
-      result.scheduleRemove = true;
-    } else if (arg === "--schedule-cron" || (arg === "--cron" && i + 1 < args.length)) {
-      result.scheduleCron = args[++i];
-    } else if (arg === "--schedule-days" || (arg === "--schedule-day" && i + 1 < args.length)) {
-      result.scheduleDays = args[++i];
-    } else if (arg === "--schedule-frequency" || (arg === "--frequency" && i + 1 < args.length)) {
-      result.scheduleFrequency = args[++i] as ScheduleFrequency;
-    } else if (arg === "--interval-hours" && i + 1 < args.length) {
-      result.intervalHours = parseInt(args[++i] ?? "1", 10);
-    } else if (arg === "--time" && i + 1 < args.length) {
-      result.scheduleTime = args[++i];
-    } else if (!arg.startsWith("-") && !result.configPath) {
-      result.configPath = arg;
-    }
-  }
-
-  return result;
-}
-
-function printHelp(): void {
-  console.log(`
-${ANSI.bold}${ANSI.brightCyan}ingest${ANSI.reset} - AI Daily Report Generator & Git Activity Explorer
-
-${ANSI.bold}USAGE:${ANSI.reset}
-  ingest                              Launch interactive TUI
-  ingest --ui [--port <N>]            Launch web browser report dashboard
-  ingest --init                       Interactive configuration setup wizard
-  ingest --init --quick               Quick setup with intelligent defaults (.ingestrc)
-  ingest --rollup                     Generate multi-repo workspace rollup summary
-  ingest clean [--days <N>]           Clean up / prune expired reports (default 30 days)
-  ingest [config-path]                Run headless generation for all repos in config
-  ingest --repo <path>                Run report for a single repository
-  ingest --date <YYYY-MM-DD>          Generate report for a specific date
-  ingest --date <start>..<end>        Generate report for a date range (e.g. 2026-08-01..2026-08-07)
-  ingest --since <date> --until <date> Generate report for a custom date range
-  ingest --compare <base>..<target>   Compare Git refs/branches/tags (e.g. main..feature)
-  ingest --diff                       Enable Git diff deep-dive analysis
-  ingest --clean                      Prune expired reports past retention period
-  ingest --view <report.md>           View markdown report in terminal pager
-  ingest --fix-diagrams <report.md>   Inspect and repair Mermaid diagram syntax with AI
-  ingest --install-skill              Deploy AI skill to ~/.gemini/config/skills/ingest/
-  ingest --schedule-install           Install automated scheduler (launchd / cron)
-  ingest --schedule-install --frequency weekdays --time 18:00
-  ingest --schedule-install --days 1,3,5 --time 09:30
-  ingest --schedule-install --frequency hourly --interval-hours 3
-  ingest --schedule-install --cron "30 9 * * 1-5"
-  ingest --schedule-install --expires <YYYY-MM-DD>  Install scheduler with automatic expiration date
-  ingest --schedule-status            Check current scheduler status
-  ingest --schedule-remove            Remove automated schedules
-
-${ANSI.bold}OPTIONS:${ANSI.reset}
-  --ui, ui, --serve           Launch web browser report explorer dashboard
-  --port <N>                  Port for web server (default: 3456)
-  --no-open                   Do not automatically open the web browser
-  --init                      Launch interactive configuration wizard
-  -q, --quick                 Use recommended defaults for fast initialization
-  --local                     Target local repo configuration (.ingestrc)
-  --global                    Target global configuration (~/.config/ingest/config.jsonc)
-  -i, --interactive           Force interactive TUI mode
-  --clean, clean              Prune expired reports older than retention period
-  --rollup                    Synthesize cross-repository executive rollup report
-  -d, --days <N>              Override expiration retention window in days (default: 30)
-  --config <path>             Path to custom config.jsonc
-  --output-root <path>        Override report output directory
-  --retention-days <days>     Report expiration retention period in days (default: 30, 0 = keep forever)
-  --expires <YYYY-MM-DD>      Set expiration date for automated scheduler
-  --expire-days <days>        Set expiration duration in days for automated scheduler
-  --date <date|range>         Specific date (YYYY-MM-DD) or range (YYYY-MM-DD..YYYY-MM-DD)
-  --since <date>              Start date for commit history
-  --until <date>              End date for commit history
-  --range <start..end>        Date range alias
-  -c, --compare <base..target> Compare commits and diffs between two Git references
-  --style <style>             Report format preset ("system-centric" | "default" | "changelog" | "security")
-  --time <HH:MM>              Scheduled run time (default: 00:00)
-  --frequency <freq>          Schedule frequency ("daily" | "weekdays" | "weekends" | "custom_days" | "hourly" | "custom")
-  --days <1-5|1,3,5|names>    Target days of week for schedule
-  --interval-hours <N>        Periodic hour interval for hourly schedules
-  --cron <expr>               Custom 5-field cron expression for schedule
-  -h, --help                  Show this help message
-`);
-}
+export type { ParsedArgs };
+export { parseCliArgs, printHelp };
 
 async function runHeadless(parsed: ParsedArgs): Promise<void> {
   const config = await ConfigManager.load(parsed.configPath);
@@ -274,14 +83,15 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
     const { baseRef, targetRef, range } = parseCompareRange(parsed.compare);
     const compareDateStr = `compare-${range.replace(/[/:\\]/g, "-")}`;
 
-    for (const repo of targetRepos) {
+    const processCompareRepo = async (repo: typeof targetRepos[0]) => {
       try {
         const repoPath = await resolveRepoPath(repo.path);
         await fetchRemoteOrigin(repoPath);
         const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
         const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
+        const prefix = `[${repoName}]`;
 
-        console.log(`\n\x1b[1mComparing:[0m \x1b[36m${repoName}\x1b[0m (${repoPath}) [\x1b[35m${range}\x1b[0m]`);
+        console.log(`\n\x1b[1mComparing: [0m \x1b[36m${repoName}\x1b[0m (${repoPath}) [\x1b[35m${range}\x1b[0m]`);
 
         const activePrompt = await resolveRepoPrompt(
           config.prompt,
@@ -293,11 +103,15 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
         const effectiveStyle = parsed.reportStyle || effectiveRepo.report_style || config.reportStyle || "default";
 
         const commits = await getCommitsBetweenRefs(repoPath, baseRef, targetRef);
-        Logger.info(`Found ${commits.length} commits between ${baseRef} and ${targetRef}.`);
+        Logger.info(`${prefix} Found ${commits.length} commits between ${baseRef} and ${targetRef}.`);
 
         let diffStat;
         if (parsed.diffMode || effectiveRepo.diff_mode !== false) {
-          diffStat = await fetchDiffStatBetweenRefs(repoPath, baseRef, targetRef, effectiveRepo.max_diff_lines);
+          diffStat = await fetchDiffStatBetweenRefs(repoPath, baseRef, targetRef, effectiveRepo.max_diff_lines, {
+            smartDiffFilter: effectiveRepo.smart_diff_filter,
+            diffIgnorePatterns: effectiveRepo.diff_ignore_patterns,
+            filePriorities: config.filePriorities,
+          });
         }
 
         const analysisContext = {
@@ -317,12 +131,12 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
         let reportMeta;
 
         if (commits.length === 0 && (!diffStat || diffStat.filesChangedCount === 0)) {
-          Logger.info(`No commits or diffs found between ${baseRef} and ${targetRef} for ${repoName}. Generating empty report.`);
+          Logger.info(`${prefix} No commits or diffs found between ${baseRef} and ${targetRef} for ${repoName}. Generating empty report.`);
           const res = generateEmptyReport(analysisContext);
           reportMarkdown = res.markdown;
           reportMeta = res.meta;
         } else {
-          Logger.info(`Calling AI provider (${config.defaultProvider})...`);
+          Logger.info(`${prefix} Calling AI provider (${config.defaultProvider})...`);
           const provider = AIFactory.getProvider(config);
           const aiResult = await provider.analyze(analysisContext);
           const res = formatReportMarkdown(analysisContext, aiResult);
@@ -331,14 +145,23 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
         }
 
         const saved = await ReportStorage.saveReport(config.outputRoot, reportMeta, reportMarkdown);
+        if (parsed.format && parsed.format !== "markdown") {
+          const formatted = formatReport(reportMarkdown, reportMeta, parsed.format as OutputFormat);
+          const formattedPath = saved.filePath.replace(/\.md$/, formatted.fileExtension);
+          const { writeFile } = await import("node:fs/promises");
+          await writeFile(formattedPath, formatted.content, "utf8");
+          Logger.info(`${prefix} Formatted report (${parsed.format}) written to ${formattedPath}`);
+        }
         const tokenInfo = reportMeta?.tokenUsage?.totalTokens
           ? ` (${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
           : "";
-        Logger.success(`Comparison report for [${range}] written to ${saved.filePath}${tokenInfo}`);
+        Logger.success(`${prefix} Comparison report for [${range}] written to ${saved.filePath}${tokenInfo}`);
       } catch (err) {
         await Logger.error(`Failed to generate comparison report for ${repo.path}`, err);
       }
-    }
+    };
+
+    await pooledMap(targetRepos, processCompareRepo, Math.min(4, targetRepos.length));
 
     if (config.retentionDays > 0) {
       const deleted = await ReportStorage.cleanExpiredReports(config.outputRoot, config.retentionDays);
@@ -350,7 +173,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   }
 
 
-  for (const repo of targetRepos) {
+  const processRepo = async (repo: typeof targetRepos[0]): Promise<RepoRollupActivity | null> => {
     const repoCommits: import("./git/types.js").CommitRecord[] = [];
     let repoDiffStat: import("./git/types.js").DiffStat | undefined = undefined;
     try {
@@ -359,6 +182,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
       const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
       const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
+      const prefix = `[${repoName}]`;
 
       console.log(`\n\x1b[1mAnalyzing repo:\x1b[0m \x1b[36m${repoName}\x1b[0m (${repoPath}) [${branches.length} branch(es): ${branches.join(", ")}]`);
 
@@ -373,15 +197,16 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
 
       for (const branch of branches) {
         try {
-          console.log(`\n  \x1b[1mBranch:\x1b[0m \x1b[35m${branch}\x1b[0m`);
+          console.log(`\n  ${prefix} \x1b[1mBranch:\x1b[0m \x1b[35m${branch}\x1b[0m`);
           const commits = await fetchRepoCommits(repoPath, [branch], dateFilter);
-          Logger.info(`Found ${commits.length} commits on branch "${branch}".`);
+          Logger.info(`${prefix} Found ${commits.length} commits on branch "${branch}".`);
 
           let diffStat;
           if ((parsed.diffMode || effectiveRepo.diff_mode !== false) && commits.length > 0) {
             diffStat = await fetchDiffStat(repoPath, [branch], dateFilter, effectiveRepo.max_diff_lines, {
               smartDiffFilter: effectiveRepo.smart_diff_filter,
               diffIgnorePatterns: effectiveRepo.diff_ignore_patterns,
+              filePriorities: config.filePriorities,
             });
           }
 
@@ -419,12 +244,12 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
           let reportMeta;
 
           if (commits.length === 0) {
-            Logger.info(`No commits found for ${repoName} on branch "${branch}". Generating empty report.`);
+            Logger.info(`${prefix} No commits found for ${repoName} on branch "${branch}". Generating empty report.`);
             const res = generateEmptyReport(analysisContext);
             reportMarkdown = res.markdown;
             reportMeta = res.meta;
           } else {
-            Logger.info(`Calling AI provider (${config.defaultProvider})...`);
+            Logger.info(`${prefix} Calling AI provider (${config.defaultProvider})...`);
             const provider = AIFactory.getProvider(config);
             const aiResult = await provider.analyze(analysisContext);
             const res = formatReportMarkdown(analysisContext, aiResult);
@@ -433,24 +258,40 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
           }
 
           const saved = await ReportStorage.saveReport(config.outputRoot, reportMeta, reportMarkdown);
+          if (parsed.format && parsed.format !== "markdown") {
+            const formatted = formatReport(reportMarkdown, reportMeta, parsed.format as OutputFormat);
+            const formattedPath = saved.filePath.replace(/\.md$/, formatted.fileExtension);
+            const { writeFile } = await import("node:fs/promises");
+            await writeFile(formattedPath, formatted.content, "utf8");
+            Logger.info(`${prefix} Formatted report (${parsed.format}) written to ${formattedPath}`);
+          }
           const tokenInfo = reportMeta?.tokenUsage?.totalTokens
             ? ` (${reportMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
             : "";
-          Logger.success(`Report for [${branch}] written to ${saved.filePath}${tokenInfo}`);
+          Logger.success(`${prefix} Report for [${branch}] written to ${saved.filePath}${tokenInfo}`);
         } catch (branchErr) {
           await Logger.error(`Failed to generate report for ${repo.path} on branch ${branch}`, branchErr);
         }
       }
 
-      repoActivities.push({
+      return {
         repoName,
         repoPath,
         branches,
         commits: repoCommits,
         diffStat: repoDiffStat,
-      });
+      };
     } catch (err) {
       await Logger.error(`Failed to generate report for ${repo.path}`, err);
+      return null;
+    }
+  };
+
+  const results = await pooledMap(targetRepos, processRepo, Math.min(4, targetRepos.length));
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
+      repoActivities.push(result.value);
     }
   }
 
@@ -526,6 +367,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
 }
 
 export async function main(): Promise<void> {
+  installTerminalGuard();
   const args = process.argv.slice(2);
   const parsed = parseCliArgs(args);
 
@@ -712,7 +554,7 @@ export async function main(): Promise<void> {
   }
 }
 
-// Execute if run directly
+// Execute CLI
 main().catch(async (err) => {
   await Logger.error("Unexpected runtime failure", err);
   process.exit(1);

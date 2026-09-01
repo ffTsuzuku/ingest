@@ -219,7 +219,10 @@ export async function promptSelect<T = string>(
       process.stdout.write(lines.join("\n") + "\n");
     };
 
+    const onResize = () => { render(); };
+
     const cleanup = () => {
+      process.stdout.removeListener("resize", onResize);
       process.stdin.setRawMode(false);
       process.stdin.pause();
       process.stdin.removeListener("data", onData);
@@ -305,6 +308,7 @@ export async function promptSelect<T = string>(
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdout.write(ANSI.hideCursor);
+    process.stdout.on("resize", onResize);
     render();
     process.stdin.on("data", onData);
   });
@@ -541,7 +545,10 @@ export async function promptMultiSelect<T = string>(options: PromptMultiSelectOp
       process.stdout.write(lines.join("\n") + "\n");
     };
 
+    const onResize = () => { render(); };
+
     const cleanup = () => {
+      process.stdout.removeListener("resize", onResize);
       process.stdin.setRawMode(false);
       process.stdin.pause();
       process.stdin.removeListener("data", onData);
@@ -671,6 +678,7 @@ export async function promptMultiSelect<T = string>(options: PromptMultiSelectOp
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdout.write(ANSI.hideCursor);
+    process.stdout.on("resize", onResize);
     render();
     process.stdin.on("data", onData);
   });

@@ -11,6 +11,7 @@ export interface CommandOptions {
   input?: string;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  maxBuffer?: number;
 }
 
 export async function executeCommand(
@@ -28,6 +29,7 @@ export async function executeCommand(
     let stdout = "";
     let stderr = "";
     let isTimedOut = false;
+    let isMaxBufferExceeded = false;
 
     let timer: NodeJS.Timeout | undefined;
     if (options.timeoutMs && options.timeoutMs > 0) {
@@ -45,7 +47,13 @@ export async function executeCommand(
     }
 
     child.stdout.on("data", (chunk) => {
+      if (options.maxBuffer && stdout.length >= options.maxBuffer) return;
       stdout += String(chunk);
+      if (options.maxBuffer && stdout.length > options.maxBuffer) {
+        stdout = stdout.slice(0, options.maxBuffer);
+        isMaxBufferExceeded = true;
+        child.kill("SIGTERM");
+      }
     });
 
     child.stderr.on("data", (chunk) => {

@@ -43,6 +43,13 @@ description: >-
      ingest --repo /path/to/repo --diff
      ingest --repo /path/to/repo --style system-centric
      ```
+   - Export reports to multi-format outputs (Markdown, JSON, HTML, Slack mrkdwn):
+     ```bash
+     ingest --repo /path/to/repo --format json
+     ingest --repo /path/to/repo --format html
+     ingest --repo /path/to/repo --format slack
+     ```
+   - Automatically executes multi-repo batches concurrently with bounded parallelism and memory-safe diff buffering.
    - Automatically tracks exact model prompt and completion tokens in generated reports (with N/A fallback when unrecorded).
 
 3. **Git Revision & Branch Comparison**:
@@ -119,7 +126,11 @@ description: >-
       "diff_mode": true,
       "max_diff_lines": 200,
       "diff_ignore_patterns": ["*.gen.ts", "fixtures/**"],
-      "smart_diff_filter": true
+      "smart_diff_filter": true,
+      "file_priorities": {
+        "high": ["*.tf", "*.proto", "Dockerfile*"],
+        "low": ["*.generated.ts", "locales/**"]
+      }
     }
   ],
   "output_root": "~/reports",
@@ -161,7 +172,7 @@ description: >-
 - **Noise Filtering**: Automatically ignores lockfiles (`package-lock.json`, `yarn.lock`, `Cargo.lock`, `go.sum`, etc.), build artifacts (`*.min.js`, `*.map`, `.tsbuildinfo`), snapshots (`*.snap`), and media/binary assets.
 - **Custom Patterns**: Configure `diff_ignore_patterns` in `.ingestrc` or `config.jsonc` for project-specific generated files.
 - **Toggle**: Disable built-in noise filtering via `"smart_diff_filter": false` if full raw diff context is required.
-- **Signal Prioritization**: When diffs are truncated to fit `max_diff_lines`, high-signal architecture manifests and core source files are prioritized over test fixtures, scripts, and localization.
+- **Signal Prioritization**: When diffs are truncated to fit `max_diff_lines`, high-signal architecture manifests and core source files are prioritized over test fixtures, scripts, and localization. Custom weight overrides can be configured via `file_priorities.high` and `file_priorities.low`.
 
 ## How to Assist Users
 

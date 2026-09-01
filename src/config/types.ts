@@ -13,6 +13,10 @@ export interface RepoConfig {
   max_diff_lines?: number;
   diff_ignore_patterns?: string[];
   smart_diff_filter?: boolean;
+  file_priorities?: {
+    high?: string[];
+    low?: string[];
+  };
 }
 
 export interface OpencodeProviderConfig {
@@ -87,6 +91,10 @@ export interface RawConfig {
   max_diff_lines?: number;
   diff_ignore_patterns?: string[];
   smart_diff_filter?: boolean;
+  file_priorities?: {
+    high?: string[];
+    low?: string[];
+  };
 }
 
 export interface LocalRepoConfig {
@@ -109,6 +117,10 @@ export interface LocalRepoConfig {
   prompt?: string;
   date_format?: string;
   repos?: RepoConfig[];
+  file_priorities?: {
+    high?: string[];
+    low?: string[];
+  };
 }
 
 export interface AppConfig {
@@ -123,6 +135,10 @@ export interface AppConfig {
   reportStyle?: ReportStyle;
   diffIgnorePatterns?: string[];
   smartDiffFilter?: boolean;
+  filePriorities?: {
+    high?: string[];
+    low?: string[];
+  };
   configPath: string;
 }
 
