@@ -1,6 +1,7 @@
 import { executeCommand } from "../utils/command.js";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getLocalDaysAheadString } from "../utils/date.js";
 import type { ScheduleConfig, ScheduleStatus } from "./types.js";
 import { daysToCronDow } from "./helpers.js";
 
@@ -78,8 +79,7 @@ export class CronScheduler {
 
     let expiresAt = config.expiresAt;
     if (!expiresAt && typeof config.expireDays === "number" && config.expireDays > 0) {
-      const targetDate = new Date(Date.now() + config.expireDays * 86400000);
-      expiresAt = targetDate.toISOString().slice(0, 10);
+      expiresAt = getLocalDaysAheadString(config.expireDays);
     }
     const expireArg = expiresAt ? ` --expire-schedule "${expiresAt}"` : "";
 

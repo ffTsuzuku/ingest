@@ -17,6 +17,8 @@ describe("Web UI Server & Dashboard", () => {
     assert.ok(html.includes("mermaid"));
     assert.ok(html.includes("table-container"));
     assert.ok(html.includes("isTableDelimiter"));
+    assert.ok(html.includes("delete-btn"));
+    assert.ok(html.includes("deleteReport"));
   });
 
   it("should format diffs with diff-line-add and not misidentify ascii box art", () => {
@@ -153,6 +155,34 @@ describe("Web UI Server & Dashboard", () => {
       assert.ok(reportJson.tokenUsage);
       assert.ok(reportJson.tokenUsage.totalTokens > 0);
 
+      // Test DELETE /api/report?repo=repo-alpha&file=2026-08-30-summary.md
+      const resDelete = await fetch(`${info.url}/api/report?repo=repo-alpha&file=2026-08-30-summary.md`, {
+        method: "DELETE",
+      });
+      assert.equal(resDelete.status, 200);
+      const deleteJson = (await resDelete.json()) as { success: boolean; message: string };
+      assert.equal(deleteJson.success, true);
+
+      // Verify report is gone
+      const resReportAfterDelete = await fetch(`${info.url}/api/report?repo=repo-alpha&file=2026-08-30-summary.md`);
+      assert.equal(resReportAfterDelete.status, 404);
+
+      // Test POST /api/report/delete for repo-beta
+      const resPostDelete = await fetch(`${info.url}/api/report/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo: "repo-beta", file: "2026-08-29-summary.md" }),
+      });
+      assert.equal(resPostDelete.status, 200);
+      const postDeleteJson = (await resPostDelete.json()) as { success: boolean };
+      assert.equal(postDeleteJson.success, true);
+
+      // Test deleting non-existent report
+      const resDeleteMissing = await fetch(`${info.url}/api/report?repo=repo-alpha&file=missing.md`, {
+        method: "DELETE",
+      });
+      assert.equal(resDeleteMissing.status, 404);
+
       // Test POST /api/fix-mermaid missing parameters
       const resFixBad = await fetch(`${info.url}/api/fix-mermaid`, {
         method: "POST",
@@ -161,7 +191,13 @@ describe("Web UI Server & Dashboard", () => {
       });
       assert.equal(resFixBad.status, 400);
 
-      // Test path traversal rejection
+      // Test path traversal rejection on delete
+      const resTraversalDelete = await fetch(`${info.url}/api/report?repo=..&file=secret.txt`, {
+        method: "DELETE",
+      });
+      assert.ok(resTraversalDelete.status === 403 || resTraversalDelete.status === 404);
+
+      // Test path traversal rejection on GET
       const resTraversal = await fetch(`${info.url}/api/report?repo=..&file=secret.txt`);
       assert.ok(resTraversal.status === 403 || resTraversal.status === 404);
 

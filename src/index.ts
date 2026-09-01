@@ -6,6 +6,7 @@ import { InteractiveTUI } from "./tui/menu.js";
 import { isGitRepo, resolveRepoPath, getGitBranches, getRepoName, fetchRemoteOrigin } from "./git/runner.js";
 import { fetchRepoCommits, resolveDateFilter, getCommitsBetweenRefs, parseCompareRange } from "./git/log.js";
 import { fetchDiffStat, fetchDiffStatBetweenRefs } from "./git/diff.js";
+import { getLocalDaysAheadString } from "./utils/date.js";
 import { AIFactory } from "./ai/factory.js";
 import { resolveRepoPrompt } from "./ai/prompt.js";
 import { formatReportMarkdown, generateEmptyReport, formatWorkspaceRollupMarkdown, generateEmptyWorkspaceRollup } from "./report/generator.js";
@@ -43,10 +44,11 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
   }
 
   const resolvedDate = resolveDateFilter({
-    dateStr: parsed.dateRange || parsed.dateStr,
+    dateStr: parsed.today ? "today" : (parsed.dateRange || parsed.dateStr),
     sinceStr: parsed.sinceStr,
     untilStr: parsed.untilStr,
     sinceHours: parsed.sinceHours,
+    today: parsed.today,
   });
   const dateStr = resolvedDate.reportDateStr;
   const dateFilter = resolvedDate.dateFilter;
@@ -348,6 +350,13 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
       }
 
       const saved = await ReportStorage.saveWorkspaceRollup(config.outputRoot, rollupMeta, rollupMarkdown);
+      if (parsed.format && parsed.format !== "markdown") {
+        const formatted = formatReport(rollupMarkdown, rollupMeta, parsed.format as OutputFormat);
+        const formattedPath = saved.filePath.replace(/\.md$/, formatted.fileExtension);
+        const { writeFile } = await import("node:fs/promises");
+        await writeFile(formattedPath, formatted.content, "utf8");
+        Logger.info(`Formatted workspace rollup report (${parsed.format}) written to ${formattedPath}`);
+      }
       const tokenInfo = rollupMeta?.tokenUsage?.totalTokens
         ? ` (${rollupMeta.tokenUsage.totalTokens.toLocaleString()} tokens)`
         : "";
@@ -442,8 +451,7 @@ export async function main(): Promise<void> {
     const time = parsed.scheduleTime || "00:00";
     let expiresAt = parsed.expiresAt;
     if (!expiresAt && parsed.expireDays && parsed.expireDays > 0) {
-      const target = new Date(Date.now() + parsed.expireDays * 86400000);
-      expiresAt = target.toISOString().slice(0, 10);
+      expiresAt = getLocalDaysAheadString(parsed.expireDays);
     }
 
     const frequency: ScheduleFrequency =
@@ -497,7 +505,7 @@ export async function main(): Promise<void> {
     console.log(`  ${ANSI.green}✔ Web server running at:${ANSI.reset} ${ANSI.bold}${ANSI.underline}${info.url}${ANSI.reset}`);
     console.log(`  ${ANSI.dim}📁 Shared report store:${ANSI.reset}  ${info.outputRoot}`);
     if (info.activeRepo) {
-      console.log(`  ${ANSI.dim} Active repository:${ANSI.reset}    ${ANSI.cyan}${info.activeRepo}${ANSI.reset}`);
+      console.log(`  ${ANSI.dim}⎇ Active repository:${ANSI.reset}    ${ANSI.cyan}${info.activeRepo}${ANSI.reset}`);
     }
     console.log(`\n  ${ANSI.dim}Press Ctrl+C to stop server${ANSI.reset}\n`);
 

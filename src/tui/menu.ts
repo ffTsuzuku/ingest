@@ -23,6 +23,7 @@ import { ConfigInitWizard } from "../config/init.js";
 import { IngestWebServer } from "../server/server.js";
 import { HarnessDiscovery } from "../ai/discovery.js";
 import { Logger } from "../utils/logger.js";
+import { getLocalDateString, getLocalDaysAgoString, getLocalDaysAheadString } from "../utils/date.js";
 
 export interface MenuContext {
   config: AppConfig;
@@ -232,7 +233,7 @@ export class InteractiveTUI {
       return;
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateString();
     let dateStr = todayStr;
     const dateFilter: { since?: string; until?: string; sinceHours?: number } = {};
 
@@ -241,6 +242,7 @@ export class InteractiveTUI {
       dateStr = todayStr;
     } else if (dateChoice === "today") {
       dateFilter.since = `${todayStr} 00:00:00`;
+      dateFilter.until = `${todayStr} 23:59:59`;
       dateStr = todayStr;
     } else if (dateChoice === "custom_date") {
       const customDateStr = await promptText({
@@ -253,7 +255,7 @@ export class InteractiveTUI {
       dateFilter.until = resolved.dateFilter.until;
       dateStr = resolved.reportDateStr;
     } else if (dateChoice === "date_range") {
-      const defaultStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const defaultStart = getLocalDaysAgoString(7);
       const startDateInput = await promptText({
         message: "Enter start date (YYYY-MM-DD):",
         defaultValue: defaultStart,
@@ -275,12 +277,12 @@ export class InteractiveTUI {
       dateFilter.until = `${end} 23:59:59`;
       dateStr = `${start}-to-${end}`;
     } else if (dateChoice === "7d") {
-      const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const start = getLocalDaysAgoString(7);
       dateFilter.since = `${start} 00:00:00`;
       dateFilter.until = `${todayStr} 23:59:59`;
       dateStr = `${start}-to-${todayStr}`;
     } else if (dateChoice === "30d") {
-      const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const start = getLocalDaysAgoString(30);
       dateFilter.since = `${start} 00:00:00`;
       dateFilter.until = `${todayStr} 23:59:59`;
       dateStr = `${start}-to-${todayStr}`;
@@ -504,6 +506,14 @@ export class InteractiveTUI {
         });
       }
 
+      if (currentReports.length > 0) {
+        choices.push({
+          label: "🗑️ Delete Report(s) (Batch Select)",
+          value: "__batch_delete__",
+          hint: "Select multiple reports to remove",
+        });
+      }
+
       choices.push({
         label: " Back",
         value: "__back__",
@@ -520,14 +530,87 @@ export class InteractiveTUI {
         return;
       }
 
+      if (chosen === "__batch_delete__") {
+        const deleteChoices = currentReports.map((r) => {
+          const styleSuffix = r.reportStyle ? ` (${r.reportStyle})` : "";
+          const branchSuffix = r.branch ? ` [ ${r.branch}]` : "";
+          const repoPrefix = isAll ? `${r.repoName} - ` : "";
+          return {
+            label: `${repoPrefix}${r.dateStr}${branchSuffix}${styleSuffix} (${r.fileName})`,
+            value: r.filePath,
+            selected: false,
+          };
+        });
+
+        const selectedPaths = await promptMultiSelect<string>({
+          message: "Select reports to delete (<Space> to toggle, <Enter> to confirm):",
+          choices: deleteChoices,
+          allowCustomInput: false,
+        });
+
+        if (selectedPaths && selectedPaths.length > 0) {
+          const confirmChoice = await promptSelect({
+            message: `Are you sure you want to permanently delete ${selectedPaths.length} selected report(s)?`,
+            choices: [
+              { label: `🗑️ Yes, delete ${selectedPaths.length} report(s)`, value: "confirm" },
+              { label: " Cancel", value: "cancel" },
+            ],
+          });
+
+          if (confirmChoice === "confirm") {
+            let deletedCount = 0;
+            for (const p of selectedPaths) {
+              const ok = await ReportStorage.deleteReport(p);
+              if (ok) deletedCount++;
+            }
+            Logger.success(`Successfully deleted ${deletedCount} report(s).`);
+          }
+        }
+        continue;
+      }
+
       if (chosen.startsWith("report:")) {
         const filePath = chosen.slice(7);
-        const { readFile } = await import("node:fs/promises");
-        try {
-          const content = await readFile(filePath, "utf8");
-          await showTerminalPager(content, filePath.split("/").pop() || "Report");
-        } catch (err) {
-          Logger.warn(`Failed to read report file: ${filePath}`);
+        const fileName = filePath.split("/").pop() || "Report";
+
+        const reportAction = await promptSelect({
+          message: `Report action for ${fileName}:`,
+          choices: [
+            { label: " View Report in Terminal Pager", value: "view", hint: "Open interactive scrollable pager" },
+            { label: "🗑️ Delete Report", value: "delete", hint: "Permanently remove this report file" },
+            { label: " Back", value: "__back__" },
+          ],
+        });
+
+        if (!reportAction || reportAction === "__back__") {
+          continue;
+        }
+
+        if (reportAction === "view") {
+          const { readFile } = await import("node:fs/promises");
+          try {
+            const content = await readFile(filePath, "utf8");
+            await showTerminalPager(content, fileName);
+          } catch {
+            Logger.warn(`Failed to read report file: ${filePath}`);
+          }
+        } else if (reportAction === "delete") {
+          const confirmChoice = await promptSelect({
+            message: `Are you sure you want to permanently delete "${fileName}"?`,
+            choices: [
+              { label: "🗑️ Yes, delete this report", value: "confirm" },
+              { label: " Cancel", value: "cancel" },
+            ],
+          });
+
+          if (confirmChoice === "confirm") {
+            const ok = await ReportStorage.deleteReport(filePath);
+            if (ok) {
+              Logger.success(`Report "${fileName}" deleted successfully.`);
+            } else {
+              Logger.error(`Failed to delete report "${fileName}".`);
+            }
+          }
         }
       }
     }
@@ -724,13 +807,13 @@ export class InteractiveTUI {
 
         let expiresAt: string | undefined;
         if (expireChoice === "7d") {
-          expiresAt = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+          expiresAt = getLocalDaysAheadString(7);
         } else if (expireChoice === "14d") {
-          expiresAt = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+          expiresAt = getLocalDaysAheadString(14);
         } else if (expireChoice === "30d") {
-          expiresAt = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+          expiresAt = getLocalDaysAheadString(30);
         } else if (expireChoice === "custom") {
-          const defaultCustom = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+          const defaultCustom = getLocalDaysAheadString(30);
           const customDate = await promptText({
             message: "Enter expiration date (YYYY-MM-DD):",
             defaultValue: defaultCustom,

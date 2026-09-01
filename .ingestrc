@@ -7,8 +7,9 @@
 // • diff_mode: When true, extracts git diff stats & line changes (+/-)
 // • max_diff_lines: Max patch lines per commit sent to AI context
 // • retention_days: Report retention expiration in days (default: 30, 0 = keep forever)
-// • default_provider: "antigravity" | "opencode" | "gemini-cli"
+// • default_provider: Default AI provider / agent harness
 // • prompt: System prompt instructions guiding AI summary generation
+// • report_style: "default" | "system-centric" | "changelog" | "security"
 {
   "repo_name": "github-ingest",
   "branches": [
@@ -16,7 +17,13 @@
   ],
   "diff_mode": true,
   "max_diff_lines": 1000,
-  "retention_days": 0,
+  "retention_days": 30,
   "default_provider": "antigravity",
-  "prompt": "Perform an engineering deep dive into repo activity over the last 24h: architectural patterns, key implementation mechanics, code diff analysis, and technical impact."
+  "prompt": "Generate a system-centric developer report: explicit codebase map, subsystem boundaries, causal Problem → Change → Result analysis, before/after behavior changes, component interactions, and commit appendix.",
+  "report_style": "system-centric",
+  "provider": {
+    "antigravity": {
+      "dangerously_skip_permissions": true
+    }
+  }
 }

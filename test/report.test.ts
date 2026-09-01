@@ -83,6 +83,63 @@ describe("Report Storage & Expiration", () => {
     }
   });
 
+  it("should delete a specific report file and clean up directory if empty", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-delete-"));
+    try {
+      const saved1 = await ReportStorage.saveReport(
+        tempDir,
+        {
+          repoName: "delete-repo",
+          repoPath: "/tmp/delete-repo",
+          branches: ["main"],
+          dateStr: "2026-08-01",
+          generatedAt: new Date().toISOString(),
+          providerLabel: "antigravity",
+          commitCount: 2,
+        },
+        "# Report 1",
+      );
+
+      const saved2 = await ReportStorage.saveReport(
+        tempDir,
+        {
+          repoName: "delete-repo",
+          repoPath: "/tmp/delete-repo",
+          branches: ["main"],
+          dateStr: "2026-08-02",
+          generatedAt: new Date().toISOString(),
+          providerLabel: "antigravity",
+          commitCount: 3,
+        },
+        "# Report 2",
+      );
+
+      let list = await ReportStorage.listReports(tempDir);
+      assert.equal(list.length, 2);
+
+      // Delete by full file path
+      const deleted1 = await ReportStorage.deleteReport(saved1.filePath);
+      assert.equal(deleted1, true);
+
+      list = await ReportStorage.listReports(tempDir);
+      assert.equal(list.length, 1);
+      assert.equal(list[0]?.fileName, "2026-08-02-summary.md");
+
+      // Delete by root, repo, file
+      const deleted2 = await ReportStorage.deleteReport(tempDir, "delete-repo", "2026-08-02-summary.md");
+      assert.equal(deleted2, true);
+
+      list = await ReportStorage.listReports(tempDir);
+      assert.equal(list.length, 0);
+
+      // Attempting to delete non-existent file should return false without error
+      const deletedNonExistent = await ReportStorage.deleteReport(tempDir, "delete-repo", "missing.md");
+      assert.equal(deletedNonExistent, false);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("should include reportStyle in filename and allow multiple styles on same date without overwriting", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "ingest-storage-styles-"));
     try {

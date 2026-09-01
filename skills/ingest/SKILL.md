@@ -26,6 +26,11 @@ description: >-
      ```bash
      ingest
      ```
+   - Generate summary of today's git activity (from 00:00 local time):
+     ```bash
+     ingest --today
+     ingest --repo /path/to/repo --today
+     ```
    - Generate multi-repository workspace rollup summary across all configured repositories:
      ```bash
      ingest --rollup
@@ -69,13 +74,14 @@ description: >-
      ingest --ui --port 3456
      ingest --ui --no-open
      ```
-   - Features live token badges (`⚡ 14.1k tokens` / `⚡ Tokens: N/A`), timeline switcher, and one-click AI Mermaid syntax repair (`✨ Fix Diagrams`).
+   - Features live token badges (`⚡ 14.1k tokens` / `⚡ Tokens: N/A`), timeline switcher, one-click report deletion (`🗑️ Delete` button or `d` shortcut with confirmation dialog), and one-click AI Mermaid syntax repair (`✨ Fix Diagrams`).
 
 5. **Terminal Markdown Viewer & Diagram Repair**:
    - View generated markdown reports directly in the terminal with ANSI styling, responsive table wrapping, and 2D Unicode Mermaid diagrams:
      ```bash
      ingest --view /path/to/report.md
      ```
+   - Delete individual reports or batch delete reports with interactive multi-selection directly from the TUI report explorer.
    - Repair and heal broken Mermaid diagram syntax via AI directly from the CLI:
      ```bash
      ingest --fix-diagrams /path/to/report.md
@@ -83,6 +89,7 @@ description: >-
    - In the pager, press `m` to toggle Mermaid rendering between **2D Connected Box Flowcharts** and **Structured Component & Flow Lists**.
 
 6. **Report Expiration & Maintenance**:
+   - Delete individual or multiple reports on demand in the TUI (`🗑️ Delete Report` / `🗑️ Delete Report(s) (Batch Select)`) or Web UI (`🗑️ Delete`).
    - Prune expired reports based on configured retention period (default: 30 days):
      ```bash
      ingest clean

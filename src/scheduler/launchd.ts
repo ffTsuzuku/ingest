@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { executeCommand } from "../utils/command.js";
+import { getLocalDaysAheadString } from "../utils/date.js";
 import type { ScheduleConfig, ScheduleStatus } from "./types.js";
 import { formatDaysSummary, normalizeDaysOfWeek, parseCronExpression } from "./helpers.js";
 
@@ -142,8 +143,7 @@ export class LaunchdScheduler {
 
     let expiresAt = config.expiresAt;
     if (!expiresAt && typeof config.expireDays === "number" && config.expireDays > 0) {
-      const targetDate = new Date(Date.now() + config.expireDays * 86400000);
-      expiresAt = targetDate.toISOString().slice(0, 10);
+      expiresAt = getLocalDaysAheadString(config.expireDays);
     }
     const expireArg = expiresAt ? `\n    <string>--expire-schedule</string>\n    <string>${expiresAt}</string>` : "";
 

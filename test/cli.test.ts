@@ -54,6 +54,12 @@ describe("CLI Argument Parser", () => {
     assert.deepStrictEqual(parseCliArgs(["-c", "v1..v2"]).compare, "v1..v2");
   });
 
+  it("should parse --today, -t, and today flags", () => {
+    assert.deepStrictEqual(parseCliArgs(["--today"]).today, true);
+    assert.deepStrictEqual(parseCliArgs(["-t"]).today, true);
+    assert.deepStrictEqual(parseCliArgs(["today"]).today, true);
+  });
+
   it("should parse --date with value", () => {
     assert.deepStrictEqual(parseCliArgs(["--date", "2026-01-15"]).dateStr, "2026-01-15");
   });

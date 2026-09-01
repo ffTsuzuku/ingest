@@ -1,4 +1,5 @@
 import type { AIProvider } from "./types.js";
+import { getLocalDateString } from "../utils/date.js";
 
 export function buildMermaidRepairPrompt(mermaidCode: string): string {
   return `You are a Mermaid diagram syntax specialist.
@@ -72,7 +73,7 @@ export async function repairMermaidDiagram(
       repoName: "diagram-repair",
       repoPath: cwd || process.cwd(),
       branches: ["main"],
-      dateStr: new Date().toISOString().slice(0, 10),
+      dateStr: getLocalDateString(),
       commits: [],
       basePrompt: prompt,
       customPrompt: prompt,
@@ -130,7 +131,7 @@ export async function repairReportMarkdown(
       repoName: "report-repair",
       repoPath: cwd || process.cwd(),
       branches: ["main"],
-      dateStr: new Date().toISOString().slice(0, 10),
+      dateStr: getLocalDateString(),
       commits: [],
       basePrompt: prompt,
       customPrompt: prompt,

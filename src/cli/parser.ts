@@ -2,6 +2,7 @@ import { ANSI } from "../tui/ansi.js";
 import type { ScheduleFrequency } from "../scheduler/types.js";
 
 export interface ParsedArgs {
+  today?: boolean;
   format?: string;
   rollup?: boolean;
   configPath?: string;
@@ -50,6 +51,8 @@ export function parseCliArgs(args: string[]): ParsedArgs {
 
     if (arg === "-h" || arg === "--help") {
       result.help = true;
+    } else if (arg === "--today" || arg === "-t" || arg === "today") {
+      result.today = true;
     } else if (arg === "--rollup" || arg === "rollup") {
       result.rollup = true;
     } else if (arg === "-i" || arg === "--interactive") {
@@ -148,6 +151,7 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --ui [--port <N>]            Launch web browser report dashboard
   ingest --init                       Interactive configuration setup wizard
   ingest --init --quick               Quick setup with intelligent defaults (.ingestrc)
+  ingest --today                      Generate summary of today's git activity
   ingest --rollup                     Generate multi-repo workspace rollup summary
   ingest clean [--days <N>]           Clean up / prune expired reports (default 30 days)
   ingest [config-path]                Run headless generation for all repos in config
@@ -179,6 +183,7 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   --local                     Target local repo configuration (.ingestrc)
   --global                    Target global configuration (~/.config/ingest/config.jsonc)
   -i, --interactive           Force interactive TUI mode
+  -t, --today                 Generate summary of today's git activity (from 00:00 local time)
   --clean, clean              Prune expired reports older than retention period
   --rollup                    Synthesize cross-repository executive rollup report
   -d, --days <N>              Override expiration retention window in days (default: 30)

@@ -307,4 +307,39 @@ export class ReportStorage {
 
     return deletedPaths;
   }
+
+  public static async deleteReport(
+    outputRootOrFilePath: string,
+    repoName?: string,
+    fileName?: string,
+  ): Promise<boolean> {
+    let filePath: string;
+    let repoDir: string | undefined;
+
+    if (repoName && fileName) {
+      filePath = join(outputRootOrFilePath, repoName, fileName);
+      repoDir = join(outputRootOrFilePath, repoName);
+    } else {
+      filePath = outputRootOrFilePath;
+      repoDir = join(filePath, "..");
+    }
+
+    try {
+      await unlink(filePath);
+      if (repoDir) {
+        try {
+          const remaining = await readdir(repoDir);
+          if (remaining.length === 0) {
+            await rmdir(repoDir);
+          }
+        } catch {
+          // Ignore rmdir error
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
+

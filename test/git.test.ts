@@ -60,6 +60,25 @@ describe("Git Log Helpers", () => {
       until: "2026-08-10 23:59:59",
     });
   });
+
+  it("should resolve today filter option and keyword using local date", () => {
+    const fromFlag = resolveDateFilter({ today: true });
+    const fromKeyword = resolveDateFilter({ dateStr: "today" });
+    const now = new Date();
+    const expectedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    assert.equal(fromFlag.reportDateStr, expectedDate);
+    assert.deepEqual(fromFlag.dateFilter, {
+      since: `${expectedDate} 00:00:00`,
+      until: `${expectedDate} 23:59:59`,
+    });
+
+    assert.equal(fromKeyword.reportDateStr, expectedDate);
+    assert.deepEqual(fromKeyword.dateFilter, {
+      since: `${expectedDate} 00:00:00`,
+      until: `${expectedDate} 23:59:59`,
+    });
+  });
 });
 
 describe("Git Runner & Diff", () => {

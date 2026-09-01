@@ -6,8 +6,8 @@
 
 ## 🚀 Features
 
-- 🖥️ **Interactive Zero-Dependency TUI/CLI**: Interactive terminal menus, arrow navigation, repository-organized report explorer, real-time search/filtering (by date, branch, keyword, or report style), fuzzy repo selection, custom date pickers, and live AI connection testing built with pure Node.js native standard libraries.
-- 🌐 **Web Browser Dashboard & Report Explorer (`--ui`)**: Lightweight, zero-dependency HTTP server (`node:http`) serving a responsive single-page application to browse, filter, search, copy, and read reports across all repositories in your shared report store.
+- 🖥️ **Interactive Zero-Dependency TUI/CLI**: Interactive terminal menus, arrow navigation, repository-organized report explorer, real-time search/filtering (by date, branch, keyword, or report style), interactive report deletion (single report action menu or batch multi-selection), fuzzy repo selection, custom date pickers, and live AI connection testing built with pure Node.js native standard libraries.
+- 🌐 **Web Browser Dashboard & Report Explorer (`--ui`)**: Lightweight, zero-dependency HTTP server (`node:http`) serving a responsive single-page application to browse, filter, search, delete (`🗑️ Delete` / `d`), copy, and read reports across all repositories in your shared report store.
 - 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, responsive table auto-wrapping, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`). Organizes reports per-repository with count badges and live search filtering.
 - 🔀 **Git Revision & Branch Comparison (`--compare <base>..<target>`)**: Compare arbitrary Git branches, tags, or revisions (e.g. `main..feature`, `origin/main...HEAD`, `v1.0.0..v2.0.0`) without requiring temporal date filtering. Analyzes commit history, diff statistics, and patch excerpts between the two references to generate structured comparison reports.
 - 🏢 **Multi-Repo Workspace Rollup (`--rollup`)**: Collects and synthesizes engineering activity across all configured repositories in your workspace into a unified cross-repo executive digest (`<output_root>/_workspace/YYYY-MM-DD-rollup-summary.md`), highlighting inter-service architectural impacts, API contract updates, stack-wide risks, and activity matrices.
@@ -70,6 +70,10 @@ ingest --init --quick
 
 # Run headless report generation for all configured repos
 ingest ~/.config/ingest/config.jsonc
+
+# Generate summary of today's git activity (from 00:00 local time)
+ingest --today
+ingest --repo /path/to/repo --today
 
 # Generate cross-repository executive workspace rollup digest
 ingest --rollup

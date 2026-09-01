@@ -1,5 +1,6 @@
 import { runGit, resolveBranchTargetRefs, resolveSingleRef } from "./runner.js";
 import { Logger } from "../utils/logger.js";
+import { getLocalDateString } from "../utils/date.js";
 import type { CommitRecord, DateFilter } from "./types.js";
 
 const COMMIT_DELIMITER = "__GIT_INGEST_COMMIT_DELIMITER__";
@@ -202,6 +203,7 @@ export interface DateFilterOptions {
   sinceStr?: string;
   untilStr?: string;
   sinceHours?: number;
+  today?: boolean;
 }
 
 export interface ResolvedDateRange {
@@ -210,6 +212,17 @@ export interface ResolvedDateRange {
 }
 
 export function resolveDateFilter(opts: DateFilterOptions = {}): ResolvedDateRange {
+  if (opts.today || (opts.dateStr && opts.dateStr.trim().toLowerCase() === "today")) {
+    const today = getLocalDateString();
+    return {
+      dateFilter: {
+        since: `${today} 00:00:00`,
+        until: `${today} 23:59:59`,
+      },
+      reportDateStr: today,
+    };
+  }
+
   // If sinceStr or untilStr explicitly provided
   if (opts.sinceStr || opts.untilStr) {
     const since = opts.sinceStr
@@ -282,7 +295,7 @@ export function resolveDateFilter(opts: DateFilterOptions = {}): ResolvedDateRan
   }
 
   if (opts.sinceHours !== undefined) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     return {
       dateFilter: {
         sinceHours: opts.sinceHours,
@@ -291,7 +304,7 @@ export function resolveDateFilter(opts: DateFilterOptions = {}): ResolvedDateRan
     };
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   return {
     dateFilter: {
       sinceHours: 24,

@@ -163,6 +163,26 @@ export class IngestWebServer {
         return;
       }
 
+      if (req.method === "DELETE") {
+        ReportStorage.deleteReport(outputRoot, repoParam, fileParam)
+          .then((deleted) => {
+            if (deleted) {
+              sendJson(200, {
+                success: true,
+                repoName: repoParam,
+                fileName: fileParam,
+                message: "Report deleted successfully",
+              });
+            } else {
+              sendError(404, "Report not found or could not be deleted");
+            }
+          })
+          .catch((err) => {
+            sendError(500, `Failed to delete report: ${String(err)}`);
+          });
+        return;
+      }
+
       readFile(targetFilePath, "utf8")
         .then((content) => {
           sendJson(200, {
@@ -176,6 +196,41 @@ export class IngestWebServer {
         .catch((err) => {
           sendError(404, `Report not found: ${String(err)}`);
         });
+      return;
+    }
+
+    if (pathname === "/api/report/delete" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", async () => {
+        try {
+          const parsed = JSON.parse(body || "{}") as { repo?: string; file?: string };
+          if (!parsed.repo || !parsed.file) {
+            sendError(400, "Missing 'repo' or 'file' parameter");
+            return;
+          }
+          const targetFilePath = normalize(join(outputRoot, parsed.repo, parsed.file));
+          if (!targetFilePath.startsWith(outputRoot)) {
+            sendError(403, "Access denied: Path traversal detected");
+            return;
+          }
+          const deleted = await ReportStorage.deleteReport(outputRoot, parsed.repo, parsed.file);
+          if (deleted) {
+            sendJson(200, {
+              success: true,
+              repoName: parsed.repo,
+              fileName: parsed.file,
+              message: "Report deleted successfully",
+            });
+          } else {
+            sendError(404, "Report not found or could not be deleted");
+          }
+        } catch (err) {
+          sendError(500, `Failed to delete report: ${String(err)}`);
+        }
+      });
       return;
     }
 

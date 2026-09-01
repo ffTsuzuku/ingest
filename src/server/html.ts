@@ -219,7 +219,8 @@ export function renderDashboardHtml(): string {
 
     /* Timeline / Reports List column */
     .timeline-panel {
-      width: 300px;
+      width: 320px;
+      min-width: 280px;
       background-color: var(--bg-canvas);
       border-right: 1px solid var(--border-color);
       display: flex;
@@ -273,7 +274,8 @@ export function renderDashboardHtml(): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 4px;
+      gap: 6px;
+      margin-bottom: 6px;
     }
 
     .report-date {
@@ -281,6 +283,16 @@ export function renderDashboardHtml(): string {
       font-weight: 600;
       color: var(--text-primary);
       font-family: var(--font-mono);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .report-badges {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .style-badge {
@@ -291,6 +303,10 @@ export function renderDashboardHtml(): string {
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      line-height: 1.4;
     }
 
     .style-badge.system-centric {
@@ -305,6 +321,22 @@ export function renderDashboardHtml(): string {
       border: 1px solid var(--border-subtle);
     }
 
+    .branch-badge {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      line-height: 1.4;
+    }
+
     .token-badge {
       font-size: 10px;
       font-family: var(--font-mono);
@@ -314,9 +346,12 @@ export function renderDashboardHtml(): string {
       background: rgba(188, 140, 255, 0.15);
       color: var(--accent-purple);
       border: 1px solid rgba(188, 140, 255, 0.3);
+      white-space: nowrap;
       display: inline-flex;
       align-items: center;
       gap: 3px;
+      line-height: 1.4;
+      flex-shrink: 0;
     }
 
     .token-badge-header {
@@ -328,9 +363,12 @@ export function renderDashboardHtml(): string {
       border-radius: 6px;
       font-family: var(--font-mono);
       font-weight: 600;
+      white-space: nowrap;
       display: inline-flex;
       align-items: center;
       gap: 4px;
+      line-height: 1.4;
+      flex-shrink: 0;
     }
 
     .btn-fix-magic {
@@ -368,25 +406,22 @@ export function renderDashboardHtml(): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       background-color: var(--bg-sidebar);
+      min-width: 0;
     }
 
-    .viewer-title-group {
+    .viewer-header-left {
       display: flex;
       align-items: center;
       gap: 12px;
-    }
-
-    .viewer-doc-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text-primary);
     }
 
     .viewer-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-shrink: 0;
     }
 
     .btn {
@@ -418,6 +453,19 @@ export function renderDashboardHtml(): string {
     .btn-primary:hover {
       background-color: #2ea043;
     }
+
+    .btn-danger {
+      background: rgba(248, 81, 73, 0.12);
+      border-color: rgba(248, 81, 73, 0.35);
+      color: var(--accent-red);
+    }
+
+    .btn-danger:hover {
+      background: rgba(248, 81, 73, 0.25);
+      border-color: var(--accent-red);
+      color: #fff;
+    }
+
 
     .viewer-content-container {
       flex: 1;
@@ -901,8 +949,7 @@ export function renderDashboardHtml(): string {
     <!-- Viewer: Report display -->
     <main class="viewer-panel">
       <div class="viewer-header" id="viewer-header" style="display: none;">
-        <div class="viewer-title-group">
-          <div class="viewer-doc-title" id="viewer-doc-title">Report Title</div>
+        <div class="viewer-header-left">
           <span class="token-badge-header" id="viewer-token-badge" style="display: none;">⚡ 0 tokens</span>
         </div>
         <div class="viewer-actions">
@@ -910,6 +957,7 @@ export function renderDashboardHtml(): string {
           <button class="btn" id="toggle-raw-btn">📝 View Raw</button>
           <button class="btn" id="copy-md-btn">📋 Copy Markdown</button>
           <button class="btn" id="download-btn">💾 Download</button>
+          <button class="btn btn-danger" id="delete-btn" title="Delete this report ( d )">🗑️ Delete</button>
         </div>
       </div>
       <div class="viewer-content-container" id="viewer-container">
@@ -1353,18 +1401,21 @@ export function renderDashboardHtml(): string {
         
         const styleName = rep.reportStyle || 'default';
         const badgeClass = rep.reportStyle === 'system-centric' ? 'style-badge system-centric' : 'style-badge default';
+        const branchIconSvg = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="display:inline-block;vertical-align:-1px;flex-shrink:0;"><path d="M11.75 2.5a2.25 2.25 0 1 0-3.18 2.05v3.9a2.247 2.247 0 0 0-1.82 2.05v.25a2.25 2.25 0 1 0 1.5 0v-.25a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 0 .75-.75V4.55a2.25 2.25 0 0 0 1.5-2.05Zm-6.5 10a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Zm5-10a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z"/></svg>';
         const branchBadgeHtml = rep.branch
-          ? '<span class="style-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);"> ' + escapeHtml(rep.branch) + '</span>'
+          ? '<span class="branch-badge">' + branchIconSvg + '<span>' + escapeHtml(rep.branch) + '</span></span>'
           : '';
         const tokenBadgeHtml = rep.tokenUsage && typeof rep.tokenUsage.totalTokens === 'number' && rep.tokenUsage.totalTokens > 0
-          ? '<span class="token-badge">⚡ ' + (rep.tokenUsage.totalTokens >= 1000 ? (rep.tokenUsage.totalTokens / 1000).toFixed(1) + 'k' : rep.tokenUsage.totalTokens) + '</span>'
-          : '<span class="token-badge" style="opacity: 0.6;">⚡ N/A</span>';
+          ? '<span class="token-badge" title="AI Token Usage: ' + rep.tokenUsage.totalTokens.toLocaleString() + ' tokens">⚡ ' + (rep.tokenUsage.totalTokens >= 1000000 ? (rep.tokenUsage.totalTokens / 1000000).toFixed(1) + 'M' : (rep.tokenUsage.totalTokens >= 1000 ? (rep.tokenUsage.totalTokens / 1000).toFixed(1) + 'k' : rep.tokenUsage.totalTokens)) + '</span>'
+          : '<span class="token-badge" style="opacity: 0.6;" title="AI Token Usage: Not Available">⚡ N/A</span>';
         
         li.innerHTML = \`
           <div class="report-date-row">
             <span class="report-date">📅 \${escapeHtml(rep.dateStr)}</span>
-            \${branchBadgeHtml}
-            <span class="\${badgeClass}">\${escapeHtml(styleName)}</span>
+            <div class="report-badges">
+              \${branchBadgeHtml}
+              <span class="\${badgeClass}">\${escapeHtml(styleName)}</span>
+            </div>
           </div>
           <div class="report-meta-row">
             <span>\${formatBytes(rep.sizeBytes)}</span>
@@ -1601,7 +1652,6 @@ export function renderDashboardHtml(): string {
     function renderReportView() {
       const header = document.getElementById('viewer-header');
       const container = document.getElementById('viewer-container');
-      const titleEl = document.getElementById('viewer-doc-title');
       const tokenBadge = document.getElementById('viewer-token-badge');
 
       if (!state.selectedReport) {
@@ -1610,12 +1660,16 @@ export function renderDashboardHtml(): string {
       }
 
       header.style.display = 'flex';
-      const branchSuffix = state.selectedReport.branch ? ' [' + state.selectedReport.branch + ']' : '';
-      const styleSuffix = state.selectedReport.reportStyle ? ' (' + state.selectedReport.reportStyle + ')' : '';
-      titleEl.textContent = state.selectedRepo + ' / ' + state.selectedReport.dateStr + branchSuffix + styleSuffix;
 
       tokenBadge.style.display = 'inline-flex';
       tokenBadge.textContent = formatTokens(state.selectedReport.tokenUsage);
+      if (state.selectedReport.tokenUsage && typeof state.selectedReport.tokenUsage.totalTokens === 'number' && state.selectedReport.tokenUsage.totalTokens > 0) {
+        tokenBadge.title = 'AI Token Usage: ' + state.selectedReport.tokenUsage.totalTokens.toLocaleString() + ' tokens';
+        tokenBadge.style.opacity = '1';
+      } else {
+        tokenBadge.title = 'AI Token Usage: Not Available';
+        tokenBadge.style.opacity = '0.6';
+      }
 
       if (state.showRaw) {
         container.innerHTML = '<div class="raw-viewer">' + escapeHtml(state.rawMarkdown) + '</div>';
@@ -1679,6 +1733,48 @@ export function renderDashboardHtml(): string {
       }
     }
 
+    async function deleteReport() {
+      if (!state.selectedReport || !state.selectedRepo) return;
+      const repoName = state.selectedReport.repoName;
+      const fileName = state.selectedReport.fileName;
+      const confirmed = window.confirm('Are you sure you want to permanently delete this report?\\n\\n' + repoName + ' / ' + fileName);
+      if (!confirmed) return;
+
+      const deleteBtn = document.getElementById('delete-btn');
+      if (deleteBtn) {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = '⏳ Deleting...';
+      }
+
+      try {
+        const res = await fetch('/api/report?repo=' + encodeURIComponent(repoName) + '&file=' + encodeURIComponent(fileName), {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Failed to delete report');
+        }
+
+        showToast('🗑️ Report deleted successfully');
+        state.selectedReport = null;
+        state.rawMarkdown = '';
+
+        // Refresh repository and report list
+        await loadRepos();
+        if (state.selectedRepo) {
+          await selectRepo(state.selectedRepo);
+        }
+      } catch (err) {
+        console.error('Failed to delete report', err);
+        showToast('❌ Deletion failed: ' + err.message);
+      } finally {
+        if (deleteBtn) {
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = '🗑️ Delete';
+        }
+      }
+    }
+
     function showEmptyViewer(msg) {
       document.getElementById('viewer-header').style.display = 'none';
       document.getElementById('viewer-container').innerHTML = \`
@@ -1698,6 +1794,8 @@ export function renderDashboardHtml(): string {
     });
 
     document.getElementById('fix-diagram-btn').addEventListener('click', () => fixMermaidDiagram());
+
+    document.getElementById('delete-btn').addEventListener('click', () => deleteReport());
 
     document.getElementById('toggle-raw-btn').addEventListener('click', () => {
       state.showRaw = !state.showRaw;
@@ -1767,6 +1865,8 @@ export function renderDashboardHtml(): string {
         document.getElementById('copy-md-btn').click();
       } else if (e.key === 'f') {
         document.getElementById('fix-diagram-btn').click();
+      } else if (e.key === 'd' || e.key === 'D') {
+        deleteReport();
       }
     });
 

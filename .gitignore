@@ -3,3 +3,4 @@ dist
 error.log
 *.swp
 .DS_Store
+.ingestrc
