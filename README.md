@@ -6,9 +6,9 @@
 
 ## 🚀 Features
 
-- 🖥️ **Interactive Zero-Dependency TUI/CLI**: Interactive terminal menus, arrow navigation, fuzzy repo selection, custom date pickers, and live AI connection testing built with pure Node.js native standard libraries.
+- 🖥️ **Interactive Zero-Dependency TUI/CLI**: Interactive terminal menus, arrow navigation, repository-organized report explorer, real-time search/filtering (by date, branch, keyword, or report style), fuzzy repo selection, custom date pickers, and live AI connection testing built with pure Node.js native standard libraries.
 - 🌐 **Web Browser Dashboard & Report Explorer (`--ui`)**: Lightweight, zero-dependency HTTP server (`node:http`) serving a responsive single-page application to browse, filter, search, copy, and read reports across all repositories in your shared report store.
-- 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, responsive table auto-wrapping, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`).
+- 📖 **Terminal Markdown Viewer & Pager**: Built-in ANSI markdown reader with headers, bullet points, syntax-highlighted code blocks, diff statistics, responsive table auto-wrapping, and scrollable pager (`Up`/`Down`, `PgUp`/`PgDn`, `q`). Organizes reports per-repository with count badges and live search filtering.
 - 🔀 **Git Revision & Branch Comparison (`--compare <base>..<target>`)**: Compare arbitrary Git branches, tags, or revisions (e.g. `main..feature`, `origin/main...HEAD`, `v1.0.0..v2.0.0`) without requiring temporal date filtering. Analyzes commit history, diff statistics, and patch excerpts between the two references to generate structured comparison reports.
 - 🏢 **Multi-Repo Workspace Rollup (`--rollup`)**: Collects and synthesizes engineering activity across all configured repositories in your workspace into a unified cross-repo executive digest (`<output_root>/_workspace/YYYY-MM-DD-rollup-summary.md`), highlighting inter-service architectural impacts, API contract updates, stack-wide risks, and activity matrices.
 - 🌿 **Branch-Isolated Reports**: When a repository monitors multiple branches (e.g. `branches: ["main", "dev"]`), `ingest` analyzes and generates dedicated individual reports for each branch (e.g. `YYYY-MM-DD-main-summary.md` and `YYYY-MM-DD-dev-summary.md`) rather than merging them into a single report.
@@ -107,8 +107,12 @@ ingest --view ~/reports/my-repo/2026-04-05-summary.md
 # Deploy AI Skill to ~/.gemini/config/skills/ingest/
 ingest --install-skill
 
-# Scheduler automation
+# Scheduler automation (Daily, Weekdays, Weekends, Custom Days, Hourly, Cron)
 ingest --schedule-install --time 00:00
+ingest --schedule-install --frequency weekdays --time 18:00
+ingest --schedule-install --days 1,3,5 --time 09:30
+ingest --schedule-install --frequency hourly --interval-hours 3
+ingest --schedule-install --cron "30 9 * * 1-5"
 ingest --schedule-install --time 00:00 --expires 2026-09-30
 ingest --schedule-install --time 00:00 --expire-days 14
 ingest --schedule-status

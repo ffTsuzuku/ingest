@@ -1,10 +1,11 @@
 import { resolve } from "node:path";
 import { ANSI, drawBox } from "./ansi.js";
-import { promptSelect, promptText } from "./prompt.js";
+import { promptMultiSelect, promptSelect, promptText } from "./prompt.js";
 import { showTerminalPager } from "./pager.js";
 import { ConfigManager } from "../config/manager.js";
 import type { AppConfig, RepoConfig } from "../config/types.js";
-import { isGitRepo, getCurrentBranch, resolveRepoPath, getGitBranches, getRepoName } from "../git/runner.js";
+import type { ReportSummary } from "../report/types.js";
+import { isGitRepo, getCurrentBranch, resolveRepoPath, getGitBranches, getRepoName, fetchRemoteOrigin } from "../git/runner.js";
 import { fetchRepoCommits, resolveDateFilter } from "../git/log.js";
 import { fetchDiffStat } from "../git/diff.js";
 import { AIFactory } from "../ai/factory.js";
@@ -15,6 +16,8 @@ import { renderMarkdownToAnsi, renderReportFileToAnsi } from "../report/viewer.j
 import { CronScheduler } from "../scheduler/cron.js";
 import { LaunchdScheduler } from "../scheduler/launchd.js";
 import { renderScheduleStatusBox } from "../scheduler/status.js";
+import type { ScheduleConfig } from "../scheduler/types.js";
+import { formatScheduleSummary } from "../scheduler/helpers.js";
 import { SkillInstaller } from "../skill/installer.js";
 import { ConfigInitWizard } from "../config/init.js";
 import { IngestWebServer } from "../server/server.js";
@@ -302,6 +305,7 @@ export class InteractiveTUI {
 
     for (const repo of targetRepos) {
       const repoPath = await resolveRepoPath(repo.path);
+      await fetchRemoteOrigin(repoPath);
       const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
       const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
       const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
@@ -385,40 +389,146 @@ export class InteractiveTUI {
     while (true) {
       console.log(`\n${ANSI.bold}${ANSI.yellow}=== Report Explorer & Viewer ===${ANSI.reset}\n`);
 
-      const reports = await ReportStorage.listReports(ctx.config.outputRoot);
-      if (reports.length === 0) {
+      const allReports = await ReportStorage.listReports(ctx.config.outputRoot);
+      if (allReports.length === 0) {
         console.log(`  ${ANSI.yellow}No reports found in ${ctx.config.outputRoot}.${ANSI.reset}`);
         return;
       }
 
-      const choices = reports.slice(0, 30).map((r) => {
-        const styleSuffix = r.reportStyle ? ` (${r.reportStyle})` : "";
-        const branchSuffix = r.branch ? ` [ ${r.branch}]` : "";
-        return {
-          label: ` ${r.repoName}${branchSuffix} [${r.dateStr}${styleSuffix}]`,
-          value: r.filePath,
-          hint: `${(r.sizeBytes / 1024).toFixed(1)} KB`,
-        };
+      const repoMap = ReportStorage.groupReportsByRepo(allReports);
+      const repoEntries = Array.from(repoMap.entries());
+
+      // Sort repositories: workspace rollups first, then alphabetically
+      repoEntries.sort(([a], [b]) => {
+        if (a === "_workspace") return -1;
+        if (b === "_workspace") return 1;
+        return a.localeCompare(b);
       });
+
+      const choices: Array<{ label: string; value: string; hint?: string }> = [];
+
+      // Global all reports option
+      choices.push({
+        label: `📑 All Historical Reports (${allReports.length} total)`,
+        value: "repo:__all__",
+        hint: "Browse and auto-filter all historical reports across all repos",
+      });
+
+      // Repository choices
+      for (const [repoName, repoReports] of repoEntries) {
+        const latest = repoReports[0];
+        const latestDateStr = latest?.dateStr ?? "N/A";
+        const countLabel = `${repoReports.length} ${repoReports.length === 1 ? "report" : "reports"}`;
+
+        if (repoName === "_workspace") {
+          choices.push({
+            label: `🌐 _workspace Rollups (${countLabel})`,
+            value: `repo:${repoName}`,
+            hint: `Latest: ${latestDateStr}`,
+          });
+        } else {
+          choices.push({
+            label: `📦 ${repoName} (${countLabel})`,
+            value: `repo:${repoName}`,
+            hint: `Latest: ${latestDateStr}`,
+          });
+        }
+      }
 
       choices.push({
         label: " Back",
         value: "__back__",
-        hint: "",
+        hint: "Return to main menu",
       });
 
-      const chosenFile = await promptSelect({
-        message: "Select a report to view in terminal pager:",
+      console.log(`  ${ANSI.dim}Central Report Store:${ANSI.reset} ${ANSI.cyan}${ctx.config.outputRoot}${ANSI.reset}`);
+      console.log(`  ${ANSI.dim}Total Reports:${ANSI.reset}        ${ANSI.bold}${ANSI.green}${allReports.length}${ANSI.reset} across ${repoEntries.length} target(s)\n`);
+
+      const action = await promptSelect({
+        message: "Select a repository to explore (type anytime to filter):",
         choices,
+        pageSize: 12,
       });
 
-      if (!chosenFile || chosenFile === "__back__") {
+      if (!action || action === "__back__") {
         return;
       }
 
-      const { readFile } = await import("node:fs/promises");
-      const content = await readFile(chosenFile, "utf8");
-      await showTerminalPager(content, chosenFile.split("/").pop() || "Report");
+      if (action.startsWith("repo:")) {
+        const repoName = action.slice(5);
+        const repoReports = repoName === "__all__" ? allReports : (repoMap.get(repoName) || []);
+        await this.handleRepoReportsView(ctx, repoName, repoReports);
+      }
+    }
+  }
+
+  private static async handleRepoReportsView(
+    ctx: MenuContext,
+    repoName: string,
+    _initialReports: ReportSummary[],
+  ): Promise<void> {
+    const isAll = repoName === "__all__" || repoName === "All Repositories";
+    const isWorkspace = repoName === "_workspace";
+    const icon = isAll ? "📑" : isWorkspace ? "🌐" : "📦";
+    const title = isAll ? "All Historical Reports" : isWorkspace ? "_workspace Rollups" : repoName;
+
+    while (true) {
+      const currentReports = isAll
+        ? await ReportStorage.listReports(ctx.config.outputRoot)
+        : await ReportStorage.listReports(ctx.config.outputRoot, repoName);
+
+      if (currentReports.length === 0) {
+        console.log(`\n  ${ANSI.yellow}No reports found for ${title}.${ANSI.reset}\n`);
+        return;
+      }
+
+      console.log(`\n${ANSI.bold}${ANSI.yellow}=== ${icon} ${title} ===${ANSI.reset}\n`);
+      const countDisplay = `${currentReports.length} reports in ${title}`;
+      console.log(`  ${ANSI.dim}${countDisplay}${ANSI.reset}\n`);
+
+      const choices: Array<{ label: string; value: string; hint?: string }> = [];
+
+      for (const r of currentReports) {
+        const styleSuffix = r.reportStyle ? ` (${r.reportStyle})` : "";
+        const branchSuffix = r.branch ? ` [ ${r.branch}]` : "";
+        const repoPrefix = isAll ? `${r.repoName} - ` : "";
+        const tokenHint = r.tokenUsage?.totalTokens
+          ? ` | ⚡ ${(r.tokenUsage.totalTokens >= 1000 ? `${(r.tokenUsage.totalTokens / 1000).toFixed(1)}k` : r.tokenUsage.totalTokens)} tok`
+          : "";
+
+        choices.push({
+          label: ` ${repoPrefix}${r.dateStr}${branchSuffix}${styleSuffix}`,
+          value: `report:${r.filePath}`,
+          hint: `${(r.sizeBytes / 1024).toFixed(1)} KB${tokenHint}`,
+        });
+      }
+
+      choices.push({
+        label: " Back",
+        value: "__back__",
+        hint: "Return to repository list",
+      });
+
+      const chosen = await promptSelect({
+        message: `Select a report in ${title} (type to filter):`,
+        choices,
+        pageSize: 12,
+      });
+
+      if (!chosen || chosen === "__back__") {
+        return;
+      }
+
+      if (chosen.startsWith("report:")) {
+        const filePath = chosen.slice(7);
+        const { readFile } = await import("node:fs/promises");
+        try {
+          const content = await readFile(filePath, "utf8");
+          await showTerminalPager(content, filePath.split("/").pop() || "Report");
+        } catch (err) {
+          Logger.warn(`Failed to read report file: ${filePath}`);
+        }
+      }
     }
   }
 
@@ -431,7 +541,7 @@ export class InteractiveTUI {
       console.log(statusBox + "\n");
 
       const choices = [
-        { label: " Install / Update Daily Report Schedule", value: "install" },
+        { label: " Install / Update Automated Report Schedule", value: "install" },
         { label: " Remove / Disable Automated Schedules", value: "uninstall" },
         { label: " Back", value: "back" },
       ];
@@ -464,12 +574,138 @@ export class InteractiveTUI {
 
         if (!targetEngine || targetEngine === "back") continue;
 
-        const timeInput = await promptText({
-          message: "Enter run time in 24-hour format (HH:MM):",
-          defaultValue: "00:00",
+        const patternChoice = await promptSelect({
+          message: "Select schedule pattern:",
+          choices: [
+            { label: " Daily (Everyday)", value: "daily", hint: "Every day at specified HH:MM" },
+            { label: " Weekdays (Mon-Fri)", value: "weekdays", hint: "Monday through Friday at HH:MM" },
+            { label: "🏖️ Weekends (Sat-Sun)", value: "weekends", hint: "Saturday & Sunday at HH:MM" },
+            { label: " Specific Days of the Week", value: "custom_days", hint: "Select custom days (e.g. Mon, Wed, Fri)" },
+            { label: " Hourly", value: "hourly", hint: "Every hour or every N hours" },
+            { label: " Custom Cron Expression", value: "custom", hint: "e.g. 30 9 * * 1-5 or 0 */3 * * *" },
+            { label: " Back", value: "back" },
+          ],
         });
 
-        if (!timeInput) continue;
+        if (!patternChoice || patternChoice === "back") continue;
+
+        let schedConfig: ScheduleConfig;
+
+        if (patternChoice === "daily") {
+          const timeInput = await promptText({
+            message: "Enter run time in 24-hour format (HH:MM):",
+            defaultValue: "00:00",
+          });
+          if (!timeInput) continue;
+          schedConfig = {
+            frequency: "daily",
+            time: timeInput.trim(),
+            configPath: ctx.config.configPath,
+          };
+        } else if (patternChoice === "weekdays") {
+          const timeInput = await promptText({
+            message: "Enter run time on weekdays in 24-hour format (HH:MM):",
+            defaultValue: "18:00",
+          });
+          if (!timeInput) continue;
+          schedConfig = {
+            frequency: "weekdays",
+            time: timeInput.trim(),
+            daysOfWeek: [1, 2, 3, 4, 5],
+            configPath: ctx.config.configPath,
+          };
+        } else if (patternChoice === "weekends") {
+          const timeInput = await promptText({
+            message: "Enter run time on weekends in 24-hour format (HH:MM):",
+            defaultValue: "10:00",
+          });
+          if (!timeInput) continue;
+          schedConfig = {
+            frequency: "weekends",
+            time: timeInput.trim(),
+            daysOfWeek: [6, 7],
+            configPath: ctx.config.configPath,
+          };
+        } else if (patternChoice === "custom_days") {
+          const selectedDays = await promptMultiSelect<number>({
+            message: "Select days of the week:",
+            choices: [
+              { label: "Monday", value: 1, selected: true },
+              { label: "Tuesday", value: 2, selected: true },
+              { label: "Wednesday", value: 3, selected: true },
+              { label: "Thursday", value: 4, selected: true },
+              { label: "Friday", value: 5, selected: true },
+              { label: "Saturday", value: 6, selected: false },
+              { label: "Sunday", value: 7, selected: false },
+            ],
+            allowCustomInput: false,
+          });
+          if (!selectedDays || selectedDays.length === 0) continue;
+
+          const timeInput = await promptText({
+            message: "Enter run time in 24-hour format (HH:MM):",
+            defaultValue: "18:00",
+          });
+          if (!timeInput) continue;
+
+          schedConfig = {
+            frequency: "custom_days",
+            time: timeInput.trim(),
+            daysOfWeek: selectedDays,
+            configPath: ctx.config.configPath,
+          };
+        } else if (patternChoice === "hourly") {
+          const hourlyChoice = await promptSelect({
+            message: "Select hourly interval:",
+            choices: [
+              { label: "Every hour (at minute :00)", value: "1" },
+              { label: "Every 2 hours", value: "2" },
+              { label: "Every 3 hours", value: "3" },
+              { label: "Every 4 hours", value: "4" },
+              { label: "Every 6 hours", value: "6" },
+              { label: "Every 12 hours", value: "12" },
+              { label: "Custom hour interval", value: "custom" },
+              { label: " Back", value: "back" },
+            ],
+          });
+          if (!hourlyChoice || hourlyChoice === "back") continue;
+
+          let interval = parseInt(hourlyChoice, 10);
+          if (hourlyChoice === "custom") {
+            const customInterval = await promptText({
+              message: "Enter interval in hours (1-23):",
+              defaultValue: "2",
+            });
+            if (!customInterval) continue;
+            interval = Math.max(1, parseInt(customInterval, 10) || 1);
+          }
+
+          const minuteInput = await promptText({
+            message: "Enter minute of the hour (0-59):",
+            defaultValue: "00",
+          });
+          if (minuteInput === null) continue;
+          const minPad = (minuteInput.trim() || "00").padStart(2, "0");
+
+          schedConfig = {
+            frequency: "hourly",
+            intervalHours: interval,
+            time: `00:${minPad}`,
+            configPath: ctx.config.configPath,
+          };
+        } else {
+          // custom cron expression
+          const exprInput = await promptText({
+            message: "Enter 5-field Cron Expression (e.g. 30 9 * * 1-5 or 0 */3 * * *):",
+            defaultValue: "0 0 * * *",
+          });
+          if (!exprInput) continue;
+          schedConfig = {
+            frequency: "custom",
+            cronExpression: exprInput.trim(),
+            configPath: ctx.config.configPath,
+          };
+        }
 
         const expireChoice = await promptSelect({
           message: "Set automated schedule expiration period?",
@@ -501,20 +737,16 @@ export class InteractiveTUI {
           if (customDate) expiresAt = customDate.trim();
         }
 
-        const schedConfig = {
-          frequency: "daily" as const,
-          time: timeInput,
-          configPath: ctx.config.configPath,
-          expiresAt,
-        };
+        schedConfig.expiresAt = expiresAt;
 
+        const summaryDesc = formatScheduleSummary(schedConfig);
         const expDesc = expiresAt ? ` (expires: ${expiresAt})` : "";
         if (targetEngine === "launchd") {
           await LaunchdScheduler.install(schedConfig);
-          Logger.success(`macOS LaunchAgent installed to run daily at ${timeInput}${expDesc}.`);
+          Logger.success(`macOS LaunchAgent installed: ${summaryDesc}${expDesc}.`);
         } else {
           await CronScheduler.install(schedConfig);
-          Logger.success(`Crontab job installed to run daily at ${timeInput}${expDesc}.`);
+          Logger.success(`Crontab job installed: ${summaryDesc}${expDesc}.`);
         }
         return;
       }

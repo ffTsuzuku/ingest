@@ -1,4 +1,4 @@
-import { runGit } from "./runner.js";
+import { runGit, resolveBranchTargetRefs, resolveSingleRef } from "./runner.js";
 import { buildGitDateArgs } from "./log.js";
 import type { DateFilter, DiffStat } from "./types.js";
 
@@ -254,9 +254,10 @@ export async function fetchDiffPatches(
 
   const dateArgs = buildGitDateArgs(filter);
   const targetBranch = branches[0] || "HEAD";
+  const targetRefs = await resolveBranchTargetRefs(repoPath, targetBranch);
 
   // Run git log with unified patch diffs (-p) and 2 lines of context (-U2)
-  const res = await runGit(["log", targetBranch, ...dateArgs, "-p", "-U2", "--no-color"], repoPath);
+  const res = await runGit(["log", ...targetRefs, ...dateArgs, "-p", "-U2", "--no-color"], repoPath);
   if (res.exitCode !== 0 || !res.stdout) {
     return "";
   }
@@ -381,9 +382,10 @@ export async function fetchDiffStat(
 
   const dateArgs = buildGitDateArgs(filter);
   const targetBranch = branches[0] || "HEAD";
+  const targetRefs = await resolveBranchTargetRefs(repoPath, targetBranch);
 
   // Run git log with diffstat
-  const res = await runGit(["log", targetBranch, ...dateArgs, "--stat"], repoPath);
+  const res = await runGit(["log", ...targetRefs, ...dateArgs, "--stat"], repoPath);
   if (res.exitCode !== 0 || !res.stdout) {
     return undefined;
   }
@@ -469,7 +471,17 @@ export async function fetchDiffPatchesBetweenRefs(
   maxPatchLinesOrOptions: number | DiffOptions = 300,
   maybeOptions?: DiffOptions,
 ): Promise<string> {
-  const range = targetRef && !baseRef.includes("..") ? `${baseRef}..${targetRef}` : baseRef;
+  let range: string;
+  if (targetRef && !baseRef.includes("..")) {
+    const resolvedBase = await resolveSingleRef(repoPath, baseRef);
+    const resolvedTarget = await resolveSingleRef(repoPath, targetRef);
+    range = `${resolvedBase}..${resolvedTarget}`;
+  } else if (!baseRef.includes("..")) {
+    const resolvedBase = await resolveSingleRef(repoPath, baseRef);
+    range = `${resolvedBase}..HEAD`;
+  } else {
+    range = baseRef;
+  }
   const maxPatchLines =
     typeof maxPatchLinesOrOptions === "number"
       ? maxPatchLinesOrOptions
@@ -575,7 +587,17 @@ export async function fetchDiffStatBetweenRefs(
   maxLinesOrOptions: number | DiffOptions = 200,
   maybeOptions?: DiffOptions,
 ): Promise<DiffStat | undefined> {
-  const range = targetRef && !baseRef.includes("..") ? `${baseRef}..${targetRef}` : baseRef;
+  let range: string;
+  if (targetRef && !baseRef.includes("..")) {
+    const resolvedBase = await resolveSingleRef(repoPath, baseRef);
+    const resolvedTarget = await resolveSingleRef(repoPath, targetRef);
+    range = `${resolvedBase}..${resolvedTarget}`;
+  } else if (!baseRef.includes("..")) {
+    const resolvedBase = await resolveSingleRef(repoPath, baseRef);
+    range = `${resolvedBase}..HEAD`;
+  } else {
+    range = baseRef;
+  }
   const maxLines =
     typeof maxLinesOrOptions === "number"
       ? maxLinesOrOptions

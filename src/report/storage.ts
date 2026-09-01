@@ -188,6 +188,38 @@ export class ReportStorage {
     });
   }
 
+  public static groupReportsByRepo(reports: ReportSummary[]): Map<string, ReportSummary[]> {
+    const map = new Map<string, ReportSummary[]>();
+    for (const report of reports) {
+      const list = map.get(report.repoName) || [];
+      list.push(report);
+      map.set(report.repoName, list);
+    }
+    return map;
+  }
+
+  public static filterReports(reports: ReportSummary[], query: string): ReportSummary[] {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      return reports;
+    }
+
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    return reports.filter((report) => {
+      const searchable = [
+        report.repoName,
+        report.dateStr,
+        report.branch ?? "",
+        report.reportStyle ?? "",
+        report.fileName,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return tokens.every((token) => searchable.includes(token));
+    });
+  }
+
   public static async listRepositories(
     outputRoot: string,
   ): Promise<Array<{ repoName: string; reportCount: number; latestDate: string; latestModified: Date }>> {

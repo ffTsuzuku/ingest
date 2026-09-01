@@ -2,6 +2,7 @@ import { executeCommand } from "../utils/command.js";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ScheduleConfig, ScheduleStatus } from "./types.js";
+import { daysToCronDow } from "./helpers.js";
 
 const CRON_START_TAG = "# BEGIN INGEST AUTOMATION";
 const CRON_END_TAG = "# END INGEST AUTOMATION";
@@ -29,13 +30,42 @@ export class CronScheduler {
   }
 
   public static buildCronExpression(config: ScheduleConfig): string {
-    if (config.cronExpression) return config.cronExpression;
-    if (config.frequency === "hourly") return "0 * * * *";
-    if (config.frequency === "weekly") return "0 0 * * 0";
+    if (config.cronExpression) return config.cronExpression.trim();
+
+    if (config.frequency === "hourly") {
+      const timeStr = config.time || "00:00";
+      const [, min = "0"] = timeStr.includes(":") ? timeStr.split(":") : ["0", timeStr];
+      const minute = parseInt(min, 10) || 0;
+      if (config.intervalHours && config.intervalHours > 1) {
+        return `${minute} */${config.intervalHours} * * *`;
+      }
+      return `${minute} * * * *`;
+    }
+
+    const [hour = "0", min = "0"] = (config.time || "00:00").split(":");
+    const minute = parseInt(min, 10) || 0;
+    const hourNum = parseInt(hour, 10) || 0;
+
+    if (config.frequency === "weekdays") {
+      return `${minute} ${hourNum} * * 1-5`;
+    }
+
+    if (config.frequency === "weekends") {
+      return `${minute} ${hourNum} * * 6,0`;
+    }
+
+    if (config.frequency === "weekly") {
+      const dow = config.daysOfWeek !== undefined ? daysToCronDow(config.daysOfWeek) : "0";
+      return `${minute} ${hourNum} * * ${dow}`;
+    }
+
+    if (config.frequency === "custom_days" || config.daysOfWeek !== undefined) {
+      const dow = daysToCronDow(config.daysOfWeek);
+      return `${minute} ${hourNum} * * ${dow}`;
+    }
 
     // Default daily at HH:MM
-    const [hour = "0", min = "0"] = (config.time || "00:00").split(":");
-    return `${parseInt(min, 10)} ${parseInt(hour, 10)} * * *`;
+    return `${minute} ${hourNum} * * *`;
   }
 
   public static async install(config: ScheduleConfig): Promise<void> {

@@ -129,6 +129,26 @@ describe("TUI Prompts & Path Autocompletion", () => {
     assert.equal(res, "opt1");
   });
 
+  it("should return defaultIndex choice in non-interactive mode when provided", async () => {
+    const res = await promptSelect({
+      message: "Select an option:",
+      choices: [
+        { label: "Option 1", value: "opt1" },
+        { label: "Option 2", value: "opt2" },
+      ],
+      defaultIndex: 1,
+    });
+    assert.equal(res, "opt2");
+  });
+
+  it("should return null for empty choices in promptSelect", async () => {
+    const res = await promptSelect({
+      message: "Select an option:",
+      choices: [],
+    });
+    assert.equal(res, null);
+  });
+
   it("should handle promptConfirm without y/n input in non-interactive mode", async () => {
     const resYes = await promptConfirm({
       message: "Continue?",

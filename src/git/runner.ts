@@ -6,8 +6,101 @@ import { executeCommand, type CommandResult } from "../utils/command.js";
 
 export { type CommandResult };
 
-export async function runGit(args: string[], cwd: string): Promise<CommandResult> {
-  return await executeCommand("git", args, { cwd });
+export async function runGit(
+  args: string[],
+  cwd: string,
+  options?: { timeoutMs?: number; env?: NodeJS.ProcessEnv },
+): Promise<CommandResult> {
+  try {
+    return await executeCommand("git", args, { cwd, timeoutMs: options?.timeoutMs, env: options?.env });
+  } catch (err: unknown) {
+    return {
+      stdout: "",
+      stderr: String(err),
+      exitCode: 1,
+    };
+  }
+}
+
+/**
+ * Check if a Git reference (branch, tag, remote ref, or commit) exists and resolves to a valid object.
+ */
+export async function refExists(ref: string, repoPath: string): Promise<boolean> {
+  try {
+    const res = await runGit(["rev-parse", "--verify", "--quiet", ref], repoPath);
+    return res.exitCode === 0 && res.stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Attempt to fetch latest refs from origin (or configured remote) with a timeout.
+ * Gracefully falls back (returns false) if offline, remote doesn't exist, or auth fails.
+ */
+export async function fetchRemoteOrigin(repoPath: string, timeoutMs: number = 8000): Promise<boolean> {
+  try {
+    const remoteRes = await runGit(["remote"], repoPath, { timeoutMs: 3000 });
+    if (remoteRes.exitCode !== 0 || !remoteRes.stdout.trim()) {
+      return false;
+    }
+
+    const remotes = remoteRes.stdout.split("\n").map((r) => r.trim()).filter(Boolean);
+    const targetRemote = remotes.includes("origin") ? "origin" : remotes[0];
+    if (!targetRemote) {
+      return false;
+    }
+
+    const fetchRes = await runGit(["fetch", targetRemote, "--prune", "--quiet"], repoPath, { timeoutMs });
+    return fetchRes.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve target refs to query for a given branch name, including origin/<branch> if available.
+ */
+export async function resolveBranchTargetRefs(repoPath: string, branch: string): Promise<string[]> {
+  if (!branch || branch.includes("..") || branch.includes("...")) {
+    return [branch || "HEAD"];
+  }
+
+  if (branch.startsWith("origin/") || branch.startsWith("refs/")) {
+    return [branch];
+  }
+
+  const localExists = await refExists(branch, repoPath);
+  const remoteRef = `origin/${branch}`;
+  const remoteExists = await refExists(remoteRef, repoPath);
+
+  const refs: string[] = [];
+  if (localExists) refs.push(branch);
+  if (remoteExists && !refs.includes(remoteRef)) refs.push(remoteRef);
+
+  return refs.length > 0 ? refs : [branch];
+}
+
+/**
+ * Resolve a single Git reference (e.g. for compare ranges), falling back to origin/<ref> if local doesn't exist.
+ */
+export async function resolveSingleRef(repoPath: string, ref: string): Promise<string> {
+  if (
+    !ref ||
+    ref.includes("..") ||
+    ref.startsWith("origin/") ||
+    ref.startsWith("refs/") ||
+    ref.includes("~") ||
+    ref.includes("^")
+  ) {
+    return ref;
+  }
+  const localExists = await refExists(ref, repoPath);
+  if (localExists) return ref;
+  const remoteRef = `origin/${ref}`;
+  const remoteExists = await refExists(remoteRef, repoPath);
+  if (remoteExists) return remoteRef;
+  return ref;
 }
 
 export async function isGitRepo(dirPath: string): Promise<boolean> {

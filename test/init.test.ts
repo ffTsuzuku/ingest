@@ -67,4 +67,56 @@ describe("Configuration Init Wizard", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("should append .ingestrc to existing .gitignore if not present", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-gitignore-test-"));
+    try {
+      const gitignorePath = join(tempDir, ".gitignore");
+      const { writeFile, readFile } = await import("node:fs/promises");
+      await writeFile(gitignorePath, "node_modules\ndist\n", "utf8");
+
+      const result = await ConfigInitWizard.handleGitignorePrompt(tempDir, ".ingestrc", true);
+      assert.equal(result, true);
+
+      const updated = await readFile(gitignorePath, "utf8");
+      assert.ok(updated.includes(".ingestrc"));
+      assert.ok(updated.includes("node_modules"));
+      assert.ok(updated.endsWith("\n"));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should not duplicate .ingestrc if already listed in .gitignore", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-gitignore-dup-"));
+    try {
+      const gitignorePath = join(tempDir, ".gitignore");
+      const { writeFile, readFile } = await import("node:fs/promises");
+      await writeFile(gitignorePath, "node_modules\n.ingestrc\ndist\n", "utf8");
+
+      const result = await ConfigInitWizard.handleGitignorePrompt(tempDir, ".ingestrc", true);
+      assert.equal(result, true);
+
+      const content = await readFile(gitignorePath, "utf8");
+      const occurrences = content.split(".ingestrc").length - 1;
+      assert.equal(occurrences, 1);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should create .gitignore and add .ingestrc if inside git repo without .gitignore", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "ingest-gitignore-create-"));
+    try {
+      const gitignorePath = join(tempDir, ".gitignore");
+      const result = await ConfigInitWizard.handleGitignorePrompt(tempDir, ".ingestrc", true);
+      assert.equal(result, true);
+
+      const { readFile } = await import("node:fs/promises");
+      const content = await readFile(gitignorePath, "utf8");
+      assert.equal(content.trim(), ".ingestrc");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

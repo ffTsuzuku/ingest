@@ -1,4 +1,4 @@
-import { runGit } from "./runner.js";
+import { runGit, resolveBranchTargetRefs, resolveSingleRef } from "./runner.js";
 import type { CommitRecord, DateFilter } from "./types.js";
 
 const COMMIT_DELIMITER = "__GIT_INGEST_COMMIT_DELIMITER__";
@@ -41,21 +41,19 @@ export async function fetchBranchCommits(
 ): Promise<CommitRecord[]> {
   const format = `${COMMIT_DELIMITER}%n%H%n%an%n%ae%n%cI%n%s%n%b`;
   const dateArgs = buildGitDateArgs(filter);
+  const targetRefs = await resolveBranchTargetRefs(repoPath, branch);
 
-  const gitArgs = ["log", branch, ...dateArgs, `--format=${format}`];
+  const gitArgs = ["log", ...targetRefs, ...dateArgs, `--format=${format}`];
   const res = await runGit(gitArgs, repoPath);
 
-  if (res.exitCode !== 0) {
+  if (res.exitCode !== 0 || !res.stdout) {
     // If branch doesn't exist or git error, return empty
-    return [];
-  }
-
-  if (!res.stdout) {
     return [];
   }
 
   const rawBlocks = res.stdout.split(COMMIT_DELIMITER).map((b) => b.trim()).filter((b) => b.length > 0);
   const commits: CommitRecord[] = [];
+  const seenHashes = new Set<string>();
 
   for (const block of rawBlocks) {
     const lines = block.split("\n");
@@ -68,7 +66,8 @@ export async function fetchBranchCommits(
     const subject = lines[4]?.trim() || "";
     const body = lines.slice(5).join("\n").trim();
 
-    if (!hash) continue;
+    if (!hash || seenHashes.has(hash)) continue;
+    seenHashes.add(hash);
 
     const filesChanged = await getChangedFilesForCommit(hash, repoPath);
 
@@ -119,7 +118,18 @@ export async function getCommitsBetweenRefs(
   baseRef: string,
   targetRef?: string,
 ): Promise<CommitRecord[]> {
-  const range = targetRef && !baseRef.includes("..") ? `${baseRef}..${targetRef}` : baseRef;
+  let range: string;
+  if (targetRef && !baseRef.includes("..")) {
+    const resolvedBase = await resolveSingleRef(repoPath, baseRef);
+    const resolvedTarget = await resolveSingleRef(repoPath, targetRef);
+    range = `${resolvedBase}..${resolvedTarget}`;
+  } else if (!baseRef.includes("..")) {
+    const resolvedBase = await resolveSingleRef(repoPath, baseRef);
+    range = `${resolvedBase}..HEAD`;
+  } else {
+    range = baseRef;
+  }
+
   const format = `${COMMIT_DELIMITER}%n%H%n%an%n%ae%n%cI%n%s%n%b`;
   const gitArgs = ["log", range, `--format=${format}`];
   const res = await runGit(gitArgs, repoPath);
@@ -130,6 +140,7 @@ export async function getCommitsBetweenRefs(
 
   const rawBlocks = res.stdout.split(COMMIT_DELIMITER).map((b) => b.trim()).filter((b) => b.length > 0);
   const commits: CommitRecord[] = [];
+  const seenHashes = new Set<string>();
 
   for (const block of rawBlocks) {
     const lines = block.split("\n");
@@ -142,7 +153,8 @@ export async function getCommitsBetweenRefs(
     const subject = lines[4]?.trim() || "";
     const body = lines.slice(5).join("\n").trim();
 
-    if (!hash) continue;
+    if (!hash || seenHashes.has(hash)) continue;
+    seenHashes.add(hash);
 
     const filesChanged = await getChangedFilesForCommit(hash, repoPath);
 

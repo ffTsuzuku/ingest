@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 import { ConfigManager } from "./config/manager.js";
 import { InteractiveTUI } from "./tui/menu.js";
-import { isGitRepo, resolveRepoPath, getGitBranches, getRepoName } from "./git/runner.js";
+import { isGitRepo, resolveRepoPath, getGitBranches, getRepoName, fetchRemoteOrigin } from "./git/runner.js";
 import { fetchRepoCommits, resolveDateFilter, getCommitsBetweenRefs, parseCompareRange } from "./git/log.js";
 import { fetchDiffStat, fetchDiffStatBetweenRefs } from "./git/diff.js";
 import { AIFactory } from "./ai/factory.js";
@@ -18,6 +18,8 @@ import { showTerminalPager } from "./tui/pager.js";
 import { CronScheduler } from "./scheduler/cron.js";
 import { LaunchdScheduler } from "./scheduler/launchd.js";
 import { renderScheduleStatusBox } from "./scheduler/status.js";
+import type { ScheduleConfig, ScheduleFrequency } from "./scheduler/types.js";
+import { formatScheduleSummary } from "./scheduler/helpers.js";
 import { SkillInstaller } from "./skill/installer.js";
 import { Logger } from "./utils/logger.js";
 import { ConfigInitWizard } from "./config/init.js";
@@ -53,6 +55,10 @@ interface ParsedArgs {
   scheduleStatus?: boolean;
   scheduleRemove?: boolean;
   scheduleTime?: string;
+  scheduleCron?: string;
+  scheduleDays?: string;
+  scheduleFrequency?: ScheduleFrequency;
+  intervalHours?: number;
   expiresAt?: string;
   expireDays?: number;
   expireSchedule?: string;
@@ -137,6 +143,14 @@ function parseCliArgs(args: string[]): ParsedArgs {
       result.scheduleStatus = true;
     } else if (arg === "--schedule-remove") {
       result.scheduleRemove = true;
+    } else if (arg === "--schedule-cron" || (arg === "--cron" && i + 1 < args.length)) {
+      result.scheduleCron = args[++i];
+    } else if (arg === "--schedule-days" || (arg === "--schedule-day" && i + 1 < args.length)) {
+      result.scheduleDays = args[++i];
+    } else if (arg === "--schedule-frequency" || (arg === "--frequency" && i + 1 < args.length)) {
+      result.scheduleFrequency = args[++i] as ScheduleFrequency;
+    } else if (arg === "--interval-hours" && i + 1 < args.length) {
+      result.intervalHours = parseInt(args[++i] ?? "1", 10);
     } else if (arg === "--time" && i + 1 < args.length) {
       result.scheduleTime = args[++i];
     } else if (!arg.startsWith("-") && !result.configPath) {
@@ -169,7 +183,11 @@ ${ANSI.bold}USAGE:${ANSI.reset}
   ingest --view <report.md>           View markdown report in terminal pager
   ingest --fix-diagrams <report.md>   Inspect and repair Mermaid diagram syntax with AI
   ingest --install-skill              Deploy AI skill to ~/.gemini/config/skills/ingest/
-  ingest --schedule-install           Install automated daily scheduler (launchd / cron)
+  ingest --schedule-install           Install automated scheduler (launchd / cron)
+  ingest --schedule-install --frequency weekdays --time 18:00
+  ingest --schedule-install --days 1,3,5 --time 09:30
+  ingest --schedule-install --frequency hourly --interval-hours 3
+  ingest --schedule-install --cron "30 9 * * 1-5"
   ingest --schedule-install --expires <YYYY-MM-DD>  Install scheduler with automatic expiration date
   ingest --schedule-status            Check current scheduler status
   ingest --schedule-remove            Remove automated schedules
@@ -198,6 +216,10 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
   -c, --compare <base..target> Compare commits and diffs between two Git references
   --style <style>             Report format preset ("system-centric" | "default" | "changelog" | "security")
   --time <HH:MM>              Scheduled run time (default: 00:00)
+  --frequency <freq>          Schedule frequency ("daily" | "weekdays" | "weekends" | "custom_days" | "hourly" | "custom")
+  --days <1-5|1,3,5|names>    Target days of week for schedule
+  --interval-hours <N>        Periodic hour interval for hourly schedules
+  --cron <expr>               Custom 5-field cron expression for schedule
   -h, --help                  Show this help message
 `);
 }
@@ -255,6 +277,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
     for (const repo of targetRepos) {
       try {
         const repoPath = await resolveRepoPath(repo.path);
+        await fetchRemoteOrigin(repoPath);
         const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
         const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
 
@@ -332,6 +355,7 @@ async function runHeadless(parsed: ParsedArgs): Promise<void> {
     let repoDiffStat: import("./git/types.js").DiffStat | undefined = undefined;
     try {
       const repoPath = await resolveRepoPath(repo.path);
+      await fetchRemoteOrigin(repoPath);
       const effectiveRepo = await ConfigManager.mergeRepoWithLocalConfig(repo, repoPath);
       const repoName = await getRepoName(repoPath, effectiveRepo.repo_name);
       const branches = effectiveRepo.branches && effectiveRepo.branches.length > 0 ? effectiveRepo.branches : ["main"];
@@ -579,22 +603,31 @@ export async function main(): Promise<void> {
       const target = new Date(Date.now() + parsed.expireDays * 86400000);
       expiresAt = target.toISOString().slice(0, 10);
     }
-    const schedConfig = {
-      frequency: "daily" as const,
+
+    const frequency: ScheduleFrequency =
+      parsed.scheduleFrequency ||
+      (parsed.scheduleCron ? "custom" : parsed.scheduleDays ? "custom_days" : "daily");
+
+    const schedConfig: ScheduleConfig = {
+      frequency,
       time,
+      cronExpression: parsed.scheduleCron,
+      daysOfWeek: parsed.scheduleDays,
+      intervalHours: parsed.intervalHours,
       configPath: parsed.configPath,
       expiresAt,
       expireDays: parsed.expireDays,
     };
 
+    const summaryDesc = formatScheduleSummary(schedConfig);
+    const expMsg = expiresAt ? ` (expires: ${expiresAt})` : "";
+
     if (LaunchdScheduler.isMacOS()) {
       await LaunchdScheduler.install(schedConfig);
-      const expMsg = expiresAt ? ` (expires: ${expiresAt})` : "";
-      Logger.success(`macOS LaunchAgent installed for ${time}${expMsg}`);
+      Logger.success(`macOS LaunchAgent installed: ${summaryDesc}${expMsg}`);
     } else {
       await CronScheduler.install(schedConfig);
-      const expMsg = expiresAt ? ` (expires: ${expiresAt})` : "";
-      Logger.success(`Crontab installed for ${time}${expMsg}`);
+      Logger.success(`Crontab installed: ${summaryDesc}${expMsg}`);
     }
     return;
   }

@@ -19,7 +19,7 @@ description: >-
      ingest --init
      ingest --init --quick
      ```
-   - Features real-time AI agent/harness discovery (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, or custom), arrow-key navigation, interactive date selectors, markdown report explorer with terminal pager, and scheduler setup.
+   - Features real-time AI agent/harness discovery (`agy`, `claude`, `codex`, `pi`, `opencode`, `gemini`, `ollama`, `aider`, or custom), arrow-key navigation, interactive date selectors, repository-organized markdown report explorer with count badges, real-time search/filtering (by date, branch, keyword, style), and scheduler setup.
 
 2. **Headless Batch Generation**:
    - Generate reports for all configured repositories:
@@ -84,9 +84,13 @@ description: >-
      ```
 
 7. **Automated Scheduling (macOS launchd & Linux Cron)**:
-   - Install or view automated daily schedule (with optional automatic expiration):
+   - Install or view automated schedule with flexible days, hours, and cron expressions (with optional automatic expiration):
      ```bash
      ingest --schedule-install --time 00:00
+     ingest --schedule-install --frequency weekdays --time 18:00
+     ingest --schedule-install --days 1,3,5 --time 09:30
+     ingest --schedule-install --frequency hourly --interval-hours 3
+     ingest --schedule-install --cron "30 9 * * 1-5"
      ingest --schedule-install --time 00:00 --expires 2026-09-30
      ingest --schedule-install --time 00:00 --expire-days 14
      ingest --schedule-status

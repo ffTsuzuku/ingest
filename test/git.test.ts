@@ -1,7 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildGitDateArgs, resolveDateFilter } from "../src/git/log.js";
-import { isGitRepo, getGitBranches, getAllGitBranches, getRepoName, extractRepoNameFromUrl } from "../src/git/runner.js";
+import { buildGitDateArgs, resolveDateFilter, fetchBranchCommits, fetchRepoCommits } from "../src/git/log.js";
+import {
+  isGitRepo,
+  getGitBranches,
+  getAllGitBranches,
+  getRepoName,
+  extractRepoNameFromUrl,
+  refExists,
+  fetchRemoteOrigin,
+  resolveBranchTargetRefs,
+  resolveSingleRef,
+} from "../src/git/runner.js";
 import { fetchDiffStat, fetchDiffPatches } from "../src/git/diff.js";
 
 describe("Git Log Helpers", () => {
@@ -96,5 +106,47 @@ describe("Git Runner & Diff", () => {
   it("should respect explicit configured repo name over git remote inference", async () => {
     const repoName = await getRepoName(process.cwd(), "custom-override-name");
     assert.equal(repoName, "custom-override-name");
+  });
+
+  it("should check if git ref exists correctly", async () => {
+    const exists = await refExists("HEAD", process.cwd());
+    assert.equal(exists, true);
+
+    const nonExistent = await refExists("non-existent-ref-12345", process.cwd());
+    assert.equal(nonExistent, false);
+  });
+
+  it("should attempt fetchRemoteOrigin and return boolean without throwing", async () => {
+    const res = await fetchRemoteOrigin(process.cwd(), 3000);
+    assert.equal(typeof res, "boolean");
+
+    // Also verify non-git folder or fake path returns false gracefully without throwing
+    const nonGitRes = await fetchRemoteOrigin("/non/existent/path", 1000);
+    assert.equal(nonGitRes, false);
+  });
+
+  it("should resolve branch target refs including origin if present", async () => {
+    const targetRefs = await resolveBranchTargetRefs(process.cwd(), "main");
+    assert.ok(Array.isArray(targetRefs));
+    assert.ok(targetRefs.length > 0);
+    assert.ok(targetRefs.includes("main") || targetRefs.includes("origin/main"));
+  });
+
+  it("should resolve single ref falling back gracefully", async () => {
+    const headRef = await resolveSingleRef(process.cwd(), "HEAD");
+    assert.equal(headRef, "HEAD");
+
+    const nonExistent = await resolveSingleRef(process.cwd(), "totally-unknown-ref-xyz");
+    assert.equal(nonExistent, "totally-unknown-ref-xyz");
+  });
+
+  it("should fetch branch commits using resolved refs without error", async () => {
+    const commits = await fetchBranchCommits(process.cwd(), "main", { sinceHours: 24 * 365 });
+    assert.ok(Array.isArray(commits));
+    if (commits.length > 0) {
+      assert.ok(commits[0]!.hash);
+      assert.ok(commits[0]!.author);
+      assert.equal(commits[0]!.branch, "main");
+    }
   });
 });

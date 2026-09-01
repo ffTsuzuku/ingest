@@ -97,48 +97,126 @@ export interface PromptTextOptions {
   completer?: readline.Completer | "path" | "dir";
 }
 
-export async function promptSelect<T = string>(options: {
+export interface SelectOption<T = string> {
+  label: string;
+  value: T;
+  hint?: string;
+}
+
+export interface PromptSelectOptions<T = string> {
   message: string;
   choices: SelectOption<T>[];
   defaultIndex?: number;
-}): Promise<T | null> {
-  const { message, choices, defaultIndex = 0 } = options;
+  pageSize?: number;
+  searchable?: boolean;
+}
+
+export async function promptSelect<T = string>(
+  options: PromptSelectOptions<T>,
+): Promise<T | null> {
+  const { message, choices, defaultIndex = 0, pageSize = 10, searchable = true } = options;
 
   if (choices.length === 0) {
     return null;
   }
 
   if (!process.stdin.isTTY) {
-    // Non-interactive fallback: return first option
-    return choices[0]!.value;
+    // Non-interactive fallback: return first option or defaultIndex option
+    const idx = Math.max(0, Math.min(defaultIndex, choices.length - 1));
+    return choices[idx]?.value ?? choices[0]!.value;
   }
 
   return new Promise((resolvePromise) => {
+    let filterText = "";
     let selectedIndex = Math.max(0, Math.min(defaultIndex, choices.length - 1));
-    let isRendered = false;
+    let lastRenderedLineCount = 0;
+
+    const getFilteredChoices = () => {
+      const lower = filterText.toLowerCase().trim();
+      if (lower.length === 0) {
+        return choices;
+      }
+      const tokens = lower.split(/\s+/).filter(Boolean);
+      return choices.filter((c) => {
+        const searchStr = `${c.label} ${c.hint || ""} ${String(c.value)}`.toLowerCase();
+        return tokens.every((token) => searchStr.includes(token));
+      });
+    };
 
     const render = () => {
       const termWidth = Math.max(20, process.stdout.columns || 80);
-      if (isRendered) {
-        // Move up choices.length + 1 lines and reset cursor to start of line
-        process.stdout.write(`\r\x1b[${choices.length + 1}A`);
+      const filtered = getFilteredChoices();
+
+      if (filtered.length === 0) {
+        selectedIndex = 0;
+      } else if (selectedIndex >= filtered.length) {
+        selectedIndex = filtered.length - 1;
+      } else if (selectedIndex < 0) {
+        selectedIndex = 0;
       }
-      isRendered = true;
 
+      const total = filtered.length;
+      let startIndex = 0;
+      let endIndex = Math.min(pageSize, total);
+
+      if (selectedIndex >= endIndex) {
+        endIndex = selectedIndex + 1;
+        startIndex = Math.max(0, endIndex - pageSize);
+      } else if (selectedIndex < startIndex) {
+        startIndex = selectedIndex;
+        endIndex = Math.min(total, startIndex + pageSize);
+      }
+
+      const visibleItems = filtered.slice(startIndex, endIndex);
+
+      // Erase previously rendered lines
+      if (lastRenderedLineCount > 0) {
+        process.stdout.write(`\r\x1b[${lastRenderedLineCount}A`);
+      }
+
+      const lines: string[] = [];
+
+      // 1. Title line
       const titleLine = `${ANSI.bold}${ANSI.cyan}?${ANSI.reset} ${ANSI.bold}${message}${ANSI.reset}`;
-      process.stdout.write(ANSI.clearLine + truncate(titleLine, termWidth - 1) + "\n");
+      lines.push(ANSI.clearLine + truncate(titleLine, termWidth - 1));
 
-      choices.forEach((choice, index) => {
-        const isSelected = index === selectedIndex;
-        const pointer = isSelected ? `${ANSI.brightCyan}❯${ANSI.reset}` : " ";
-        const label = isSelected
-          ? `${ANSI.bold}${ANSI.brightCyan}${choice.label}${ANSI.reset}`
-          : `${ANSI.white}${choice.label}${ANSI.reset}`;
-        const hint = choice.hint ? ` ${ANSI.gray}(${choice.hint})${ANSI.reset}` : "";
+      // 2. Search Filter line (shown when filter text is present or when list is searchable)
+      if (filterText.length > 0) {
+        const searchDisplay = `${ANSI.yellow}${filterText}${ANSI.reset}`;
+        const matchCount = `${ANSI.dim}(${filtered.length}/${choices.length} matches)${ANSI.reset}`;
+        lines.push(ANSI.clearLine + `  ${ANSI.bold}Search:${ANSI.reset} ${searchDisplay} ${matchCount}`);
+      }
 
-        const line = `  ${pointer} ${label}${hint}`;
-        process.stdout.write(ANSI.clearLine + truncate(line, termWidth - 1) + "\n");
-      });
+      // 3. Top scroll indicator
+      if (startIndex > 0) {
+        lines.push(ANSI.clearLine + `  ${ANSI.dim}▲ ${startIndex} more above...${ANSI.reset}`);
+      }
+
+      // 4. Visible items
+      if (filtered.length === 0) {
+        lines.push(ANSI.clearLine + `  ${ANSI.gray}No matching options found for "${filterText}"${ANSI.reset}`);
+      } else {
+        visibleItems.forEach((choice, idx) => {
+          const globalIdx = startIndex + idx;
+          const isSelected = globalIdx === selectedIndex;
+          const pointer = isSelected ? `${ANSI.brightCyan}❯${ANSI.reset}` : " ";
+          const label = isSelected
+            ? `${ANSI.bold}${ANSI.brightCyan}${choice.label}${ANSI.reset}`
+            : `${ANSI.white}${choice.label}${ANSI.reset}`;
+          const hint = choice.hint ? ` ${ANSI.gray}(${choice.hint})${ANSI.reset}` : "";
+
+          const line = `  ${pointer} ${label}${hint}`;
+          lines.push(ANSI.clearLine + truncate(line, termWidth - 1));
+        });
+      }
+
+      // 5. Bottom scroll indicator
+      if (endIndex < total) {
+        lines.push(ANSI.clearLine + `  ${ANSI.dim}▼ ${total - endIndex} more below...${ANSI.reset}`);
+      }
+
+      lastRenderedLineCount = lines.length;
+      process.stdout.write(lines.join("\n") + "\n");
     };
 
     const cleanup = () => {
@@ -154,11 +232,18 @@ export async function promptSelect<T = string>(options: {
       // Enter key
       if (key === "\r" || key === "\n") {
         cleanup();
+        const filtered = getFilteredChoices();
         const termWidth = Math.max(20, process.stdout.columns || 80);
-        const selected = choices[selectedIndex]!;
-        const summary = `${ANSI.bold}${ANSI.green}✔${ANSI.reset} ${message} ${ANSI.cyan}${selected.label}${ANSI.reset}`;
-        process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n\n");
-        resolvePromise(selected.value);
+        if (filtered.length > 0 && filtered[selectedIndex]) {
+          const selected = filtered[selectedIndex]!;
+          const summary = `${ANSI.bold}${ANSI.green}✔${ANSI.reset} ${message} ${ANSI.cyan}${selected.label}${ANSI.reset}`;
+          process.stdout.write(ANSI.clearLine + truncate(summary, termWidth - 1) + "\n\n");
+          resolvePromise(selected.value);
+        } else {
+          const backSummary = `${ANSI.bold}${ANSI.gray}↩${ANSI.reset} ${ANSI.dim}${message} (Cancelled)${ANSI.reset}`;
+          process.stdout.write(ANSI.clearLine + truncate(backSummary, termWidth - 1) + "\n\n");
+          resolvePromise(null);
+        }
         return;
       }
 
@@ -178,15 +263,42 @@ export async function promptSelect<T = string>(options: {
         return;
       }
 
-      // Up arrow or k
-      if (key === "\u001b[A" || key === "k") {
-        selectedIndex = (selectedIndex - 1 + choices.length) % choices.length;
-        render();
+      // Up arrow or Ctrl+P
+      if (key === "\u001b[A" || key === "\u001bOA" || key === "\u0010") {
+        const filtered = getFilteredChoices();
+        if (filtered.length > 0) {
+          selectedIndex = (selectedIndex - 1 + filtered.length) % filtered.length;
+          render();
+        }
+        return;
       }
-      // Down arrow or j
-      else if (key === "\u001b[B" || key === "j") {
-        selectedIndex = (selectedIndex + 1) % choices.length;
+
+      // Down arrow or Ctrl+N
+      if (key === "\u001b[B" || key === "\u001bOB" || key === "\u000e") {
+        const filtered = getFilteredChoices();
+        if (filtered.length > 0) {
+          selectedIndex = (selectedIndex + 1) % filtered.length;
+          render();
+        }
+        return;
+      }
+
+      // Backspace: Delete from search filter
+      if (chunk.length === 1 && (chunk[0] === 0x7f || chunk[0] === 0x08)) {
+        if (filterText.length > 0) {
+          filterText = filterText.slice(0, -1);
+          selectedIndex = 0;
+          render();
+        }
+        return;
+      }
+
+      // Printable character typing (auto-starts real-time search / filter)
+      if (searchable && chunk.length === 1 && chunk[0]! >= 32 && chunk[0]! <= 126) {
+        filterText += chunk.toString();
+        selectedIndex = 0;
         render();
+        return;
       }
     };
 

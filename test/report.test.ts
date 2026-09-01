@@ -265,4 +265,125 @@ describe("Report Storage & Expiration", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("should group reports by repository correctly", () => {
+    const mockReports = [
+      {
+        filePath: "/reports/repo-a/2026-08-31-summary.md",
+        fileName: "2026-08-31-summary.md",
+        repoName: "repo-a",
+        dateStr: "2026-08-31",
+        sizeBytes: 1024,
+        modifiedAt: new Date(),
+      },
+      {
+        filePath: "/reports/repo-a/2026-08-30-summary.md",
+        fileName: "2026-08-30-summary.md",
+        repoName: "repo-a",
+        dateStr: "2026-08-30",
+        sizeBytes: 1024,
+        modifiedAt: new Date(),
+      },
+      {
+        filePath: "/reports/repo-b/2026-08-31-summary.md",
+        fileName: "2026-08-31-summary.md",
+        repoName: "repo-b",
+        dateStr: "2026-08-31",
+        sizeBytes: 2048,
+        modifiedAt: new Date(),
+      },
+      {
+        filePath: "/reports/_workspace/2026-08-31-rollup-summary.md",
+        fileName: "2026-08-31-rollup-summary.md",
+        repoName: "_workspace",
+        dateStr: "2026-08-31",
+        sizeBytes: 4096,
+        modifiedAt: new Date(),
+      },
+    ];
+
+    const grouped = ReportStorage.groupReportsByRepo(mockReports);
+    assert.equal(grouped.size, 3);
+    assert.equal(grouped.get("repo-a")?.length, 2);
+    assert.equal(grouped.get("repo-b")?.length, 1);
+    assert.equal(grouped.get("_workspace")?.length, 1);
+  });
+
+  it("should filter reports by date, branch, style, and keywords", () => {
+    const mockReports = [
+      {
+        filePath: "/reports/frontend/2026-08-31-main-system-centric-summary.md",
+        fileName: "2026-08-31-main-system-centric-summary.md",
+        repoName: "frontend",
+        dateStr: "2026-08-31",
+        branch: "main",
+        reportStyle: "system-centric",
+        sizeBytes: 1200,
+        modifiedAt: new Date(),
+      },
+      {
+        filePath: "/reports/frontend/2026-08-25-feature-auth-changelog-summary.md",
+        fileName: "2026-08-25-feature-auth-changelog-summary.md",
+        repoName: "frontend",
+        dateStr: "2026-08-25",
+        branch: "feature-auth",
+        reportStyle: "changelog",
+        sizeBytes: 1500,
+        modifiedAt: new Date(),
+      },
+      {
+        filePath: "/reports/backend/2026-08-31-develop-security-summary.md",
+        fileName: "2026-08-31-develop-security-summary.md",
+        repoName: "backend",
+        dateStr: "2026-08-31",
+        branch: "develop",
+        reportStyle: "security",
+        sizeBytes: 2200,
+        modifiedAt: new Date(),
+      },
+      {
+        filePath: "/reports/_workspace/2026-08-31-rollup-summary.md",
+        fileName: "2026-08-31-rollup-summary.md",
+        repoName: "_workspace",
+        dateStr: "2026-08-31",
+        branch: "rollup",
+        reportStyle: undefined,
+        sizeBytes: 3500,
+        modifiedAt: new Date(),
+      },
+    ];
+
+    // 1. Search by date prefix
+    const byDate = ReportStorage.filterReports(mockReports, "2026-08-31");
+    assert.equal(byDate.length, 3);
+    assert.ok(byDate.every((r) => r.dateStr === "2026-08-31"));
+
+    // 2. Search by branch
+    const byBranch = ReportStorage.filterReports(mockReports, "feature-auth");
+    assert.equal(byBranch.length, 1);
+    assert.equal(byBranch[0]?.repoName, "frontend");
+
+    // 3. Search by style
+    const byStyle = ReportStorage.filterReports(mockReports, "security");
+    assert.equal(byStyle.length, 1);
+    assert.equal(byStyle[0]?.repoName, "backend");
+
+    // 4. Search by keyword
+    const byKeyword = ReportStorage.filterReports(mockReports, "_workspace");
+    assert.equal(byKeyword.length, 1);
+    assert.equal(byKeyword[0]?.repoName, "_workspace");
+
+    // 5. Multi-token search (AND condition across tokens)
+    const multiToken = ReportStorage.filterReports(mockReports, "frontend system-centric");
+    assert.equal(multiToken.length, 1);
+    assert.equal(multiToken[0]?.fileName, "2026-08-31-main-system-centric-summary.md");
+
+    // 6. Empty / whitespace search returns all
+    const all = ReportStorage.filterReports(mockReports, "   ");
+    assert.equal(all.length, mockReports.length);
+
+    // 7. Non-matching query returns empty
+    const none = ReportStorage.filterReports(mockReports, "nonexistent-query-12345");
+    assert.equal(none.length, 0);
+  });
 });

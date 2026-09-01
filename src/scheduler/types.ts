@@ -1,9 +1,18 @@
-export type ScheduleFrequency = "daily" | "hourly" | "weekly" | "custom";
+export type ScheduleFrequency =
+  | "daily"
+  | "weekdays"
+  | "weekends"
+  | "custom_days"
+  | "hourly"
+  | "custom"
+  | "weekly";
 
 export interface ScheduleConfig {
   frequency: ScheduleFrequency;
   time?: string; // HH:MM, e.g. "00:00"
-  cronExpression?: string; // e.g. "0 0 * * *"
+  daysOfWeek?: number[] | string; // Days of week: e.g. [1, 2, 3, 4, 5], "1-5", "1,3,5", or "Mon,Wed,Fri"
+  intervalHours?: number; // Hourly interval in hours, e.g. 1, 2, 3...
+  cronExpression?: string; // e.g. "0 0 * * *" or "30 9 * * 1-5"
   configPath?: string;
   outputRoot?: string;
   expiresAt?: string; // YYYY-MM-DD expiration date
